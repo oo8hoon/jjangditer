@@ -5,6 +5,7 @@
  *
  *   npm run release -- --notes "표 기능 추가"
  *   npm run release -- --notes "표 기능 추가" --to "\\\\파일서버\\공유\\짱디터"
+ *   npm run release -- --notes "표 기능 추가" --gh      # GitHub 릴리스용 묶음
  *
  * 하는 일
  *   1) dist 에서 이번 버전의 exe 를 찾는다
@@ -25,6 +26,34 @@ function arg(name, def) {
 
 function sha256(file) {
   return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+}
+
+/** GitHub 릴리스는 한글 파일명을 바꿔버리므로 영문 이름으로 복사한다 */
+function stageForGitHub(exePath, version, notes) {
+  const out = path.join(DIST, 'release');
+  fs.rmSync(out, { recursive: true, force: true });
+  fs.mkdirSync(out, { recursive: true });
+
+  const asciiName = 'JJangditer-' + version + '.exe';
+  fs.copyFileSync(exePath, path.join(out, asciiName));
+
+  const info = {
+    version: version,
+    file: asciiName,
+    notes: notes,
+    date: new Date().toISOString().slice(0, 10),
+    size: fs.statSync(exePath).size,
+    sha256: sha256(exePath)
+  };
+  fs.writeFileSync(path.join(out, 'latest.json'), JSON.stringify(info, null, 2), 'utf8');
+
+  console.log('');
+  console.log('GitHub 릴리스용 묶음: ' + out);
+  console.log('  ' + asciiName);
+  console.log('  latest.json   (file = ' + asciiName + ')');
+  console.log('');
+  console.log('이 두 파일을 릴리스에 첨부하면 됩니다.');
+  return out;
 }
 
 function main() {
@@ -60,11 +89,14 @@ function main() {
   };
 
   const latest = path.join(DIST, 'latest.json');
+  const wantGh = process.argv.indexOf('--gh') >= 0;
   fs.writeFileSync(latest, JSON.stringify(info, null, 2), 'utf8');
   console.log('latest.json 생성');
   console.log('  버전 : ' + info.version);
   console.log('  파일 : ' + info.file + '  (' + (stat.size / 1048576).toFixed(1) + ' MB)');
   if (info.notes) console.log('  내용 : ' + info.notes);
+
+  if (wantGh) { stageForGitHub(full, version, info.notes); return; }
 
   const to = arg('to', null);
   if (!to) {
