@@ -1,0 +1,919 @@
+/* 짱디터 스타일 */
+:root {
+  --strip: 9px;
+
+  --bg: #14161c;
+  --bg2: #1b1e26;
+  --bg3: #22262f;
+  --line: #2e333e;
+  --fg: #dfe3ea;
+  --fg-dim: #8c94a3;
+  --accent: #4da3ff;
+  --accent-dim: #26405e;
+  --ok: #3ecf8e;
+  --warn: #ffb648;
+  --danger: #ff6b6b;
+  --code-bg: #0f1117;
+  --radius: 6px;
+
+  /* 글 칸 글자체 — 보기 메뉴에서 바뀐다.
+     열 편집이 맞아떨어지려면 한글이 영문 정확히 두 배 폭인 글꼴이어야 한다. */
+  --mono: "굴림체", GulimChe, "돋움체", DotumChe, "D2Coding", Consolas, monospace;
+  --monosz: 13px;
+  --monolh: 1.45;   /* 줄 간격 */
+}
+
+body[data-theme="light"] {
+  --bg: #f4f6fa;
+  --bg2: #ffffff;
+  --bg3: #eceff5;
+  --line: #d6dbe4;
+  --fg: #1f2430;
+  --fg-dim: #6b7280;
+  --accent: #1f6fd0;
+  --accent-dim: #d6e6fb;
+  --ok: #138a5e;
+  --warn: #a36300;
+  --danger: #c93b3b;
+  --code-bg: #f0f2f7;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0; padding: 0; height: 100%;
+  overflow: hidden;
+  font-family: "Malgun Gothic", "맑은 고딕", "Segoe UI", system-ui, sans-serif;
+  font-size: 13px;
+  color: var(--fg);
+  background: transparent;
+  user-select: none;
+}
+
+/* ---------- 트리거 띠 ----------
+   숨김 상태의 띠는 별도 창(trigger.html)이 담당하므로 패널 안에서는 쓰지 않는다 */
+#strip { display: none; }
+#strip-unused {
+  position: fixed; left: 0; top: 0; bottom: 0;
+  width: var(--strip);
+  background: linear-gradient(180deg, var(--accent), #2a6fb3);
+  cursor: pointer;
+  z-index: 50;
+  display: flex; align-items: center; justify-content: center;
+}
+#strip .stripdots {
+  width: 3px; height: 46px; border-radius: 3px;
+  background: rgba(255,255,255,.55);
+}
+#strip:hover { filter: brightness(1.2); }
+
+/* ---------- 패널 ---------- */
+#panel {
+  position: fixed;
+  left: 0; top: 0; right: 0; bottom: 0;
+  background: var(--bg);
+  border-left: 1px solid var(--line);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+
+#resizer {
+  position: absolute; left: 0; top: 0; bottom: 0; width: 5px;
+  cursor: ew-resize; z-index: 20;
+}
+#resizer:hover { background: var(--accent); opacity: .5; }
+
+/* ---------- 타이틀바 ---------- */
+#titlebar {
+  display: flex; align-items: center; gap: 2px;
+  height: 34px; min-height: 34px;
+  padding: 0 4px 0 10px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--line);
+}
+.drag { -webkit-app-region: drag; }
+#titlebar .brand {
+  font-weight: 700; letter-spacing: .5px; font-size: 14px;
+  color: var(--accent); padding: 6px 2px;
+}
+#titlebar .brand .ver { font-size: 10px; color: var(--fg-dim); font-weight: 400; margin-left: 5px; }
+#titlebar .spacer { flex: 1; height: 100%; }
+
+button { font-family: inherit; }
+.tb {
+  -webkit-app-region: no-drag;
+  background: transparent; border: 0; color: var(--fg-dim);
+  width: 26px; height: 24px; border-radius: 4px; cursor: pointer;
+  font-size: 12px; line-height: 1; display: grid; place-items: center;
+}
+.tb:hover { background: var(--bg3); color: var(--fg); }
+.tb.danger:hover { background: var(--danger); color: #fff; }
+.tb.on { background: var(--accent-dim); color: var(--accent); }
+
+/* ---------- 탭 ---------- */
+#tabbar {
+  display: flex; align-items: stretch;
+  background: var(--bg2); border-bottom: 1px solid var(--line);
+  min-height: 30px;
+}
+#tabs { display: flex; overflow-x: auto; flex: 1; scrollbar-width: none; }
+#tabs::-webkit-scrollbar { height: 0; }
+.tab {
+  display: flex; align-items: center; gap: 5px;
+  padding: 5px 9px; cursor: pointer; white-space: nowrap;
+  border-right: 1px solid var(--line);
+  border-bottom: 2px solid transparent;
+  color: var(--fg-dim); font-size: 12px; max-width: 160px;
+}
+.tab:hover { background: var(--bg3); }
+.tab.active { color: var(--fg); background: var(--bg); border-bottom-color: var(--accent); font-weight: 600; }
+.tab .tname { overflow: hidden; text-overflow: ellipsis; }
+.tab .tcount { font-size: 10px; color: var(--fg-dim); background: var(--bg3); border-radius: 8px; padding: 1px 5px; }
+.tab.active .tcount { background: var(--accent-dim); color: var(--accent); }
+.tab.alldone .tcount { background: rgba(62,207,142,.18); color: var(--ok); }
+.tab input.rename {
+  background: var(--bg); border: 1px solid var(--accent); color: var(--fg);
+  font: inherit; width: 110px; border-radius: 3px; padding: 1px 4px;
+}
+
+/* ---------- 툴바 / 진행률 ---------- */
+#toolbar {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 8px; border-bottom: 1px solid var(--line); background: var(--bg);
+}
+#progressWrap { flex: 1; height: 6px; background: var(--bg3); border-radius: 4px; overflow: hidden; }
+#progressBar { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--ok)); transition: width .2s; }
+#progressText { font-size: 11px; color: var(--fg-dim); font-variant-numeric: tabular-nums; }
+.chip {
+  background: var(--bg3); border: 1px solid var(--line); color: var(--fg-dim);
+  border-radius: 20px; padding: 2px 9px; font-size: 11px; cursor: pointer;
+}
+.chip:hover { color: var(--fg); border-color: var(--fg-dim); }
+.chip.on { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
+
+/* ---------- 행 목록 ---------- */
+#rows { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 6px 8px 40px; }
+#rows::-webkit-scrollbar { width: 9px; }
+#rows::-webkit-scrollbar-thumb { background: var(--bg3); border-radius: 5px; }
+#rows::-webkit-scrollbar-thumb:hover { background: var(--line); }
+
+.empty { color: var(--fg-dim); text-align: center; padding: 40px 14px; line-height: 1.8; font-size: 12px; }
+.empty b { color: var(--fg); }
+.empty .etitle { font-size: 13px; margin-bottom: 14px; }
+.empty .ebtns { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-bottom: 16px; }
+.empty .ebtns button {
+  background: var(--bg3); border: 1px solid var(--line); color: var(--fg);
+  border-radius: var(--radius); padding: 7px 13px; cursor: pointer; font-size: 12px;
+}
+.empty .ebtns button:hover { color: var(--accent); border-color: var(--accent); }
+.empty .ehint { font-size: 11.5px; }
+
+/* 빈 탭이면 작업 화면에서도 아래 추가 줄을 보여 준다 */
+body.mode-work.empty-tab #addbar { display: flex; }
+
+/* 섹션 */
+.section {
+  display: flex; align-items: center; gap: 4px;
+  margin: 10px 0 4px; padding: 4px 6px;
+  background: var(--bg3); border-radius: var(--radius);
+  border-left: 3px solid var(--accent);
+}
+.section:first-child { margin-top: 2px; }
+.section .caret {
+  background: transparent; border: 0; color: var(--fg-dim); cursor: pointer;
+  width: 16px; font-size: 10px; padding: 0;
+}
+.section input.label {
+  flex: 1; background: transparent; border: 0; color: var(--fg);
+  font: 700 12.5px inherit; padding: 2px 0; outline: none;
+}
+.section .count {
+  font-size: 10px; color: var(--fg-dim); font-variant-numeric: tabular-nums;
+  background: var(--bg2); padding: 1px 6px; border-radius: 8px;
+}
+.section.done-all { border-left-color: var(--ok); }
+.section.done-all .count { color: var(--ok); }
+.group.collapsed { display: none; }
+
+/* 공통 행 */
+.row {
+  background: var(--bg2); border: 1px solid var(--line);
+  border-radius: var(--radius); margin: 4px 0; padding: 5px 6px;
+  border-left: 3px solid transparent;
+}
+.row.next { border-left-color: var(--warn); box-shadow: 0 0 0 1px rgba(255,182,72,.25); }
+.row.done { opacity: .55; border-left-color: var(--ok); }
+.row.done .label { text-decoration: line-through; color: var(--fg-dim); }
+
+.rowmain { display: flex; align-items: center; gap: 5px; }
+.handle { color: var(--fg-dim); cursor: grab; font-size: 11px; padding: 0 1px; opacity: .45; }
+.handle:hover { opacity: 1; }
+.row.dragging { opacity: .4; }
+.row.dropafter { border-bottom: 2px solid var(--accent); }
+.row.dropbefore { border-top: 2px solid var(--accent); }
+
+.chk { width: 15px; height: 15px; accent-color: var(--ok); cursor: pointer; margin: 0; flex: none; }
+input.label {
+  flex: 1; min-width: 0; background: transparent; border: 0; outline: none;
+  color: var(--fg); font: 600 12.5px inherit; padding: 2px 0;
+}
+input.label::placeholder, input::placeholder, textarea::placeholder { color: var(--fg-dim); opacity: .6; font-weight: 400; }
+
+.acts { display: flex; gap: 0; opacity: 0; transition: opacity .12s; flex: none; }
+.row:hover .acts, .section:hover .acts, .row:focus-within .acts { opacity: 1; }
+.acts button {
+  background: transparent; border: 0; color: var(--fg-dim); cursor: pointer;
+  width: 20px; height: 20px; border-radius: 3px; font-size: 11px; padding: 0;
+  display: grid; place-items: center;
+}
+.acts button:hover { background: var(--bg3); color: var(--fg); }
+.acts button.del:hover { background: var(--danger); color: #fff; }
+
+/* 필드 */
+.fields { display: flex; flex-direction: column; gap: 3px; margin: 4px 0 2px 20px; }
+.f { display: flex; align-items: flex-start; gap: 5px; }
+.f > label { padding-top: 4px; }
+.f.cur, .f.tgt, .f.keyf { align-items: center; }
+.f.cur > label, .f.tgt > label, .f.keyf > label { padding-top: 0; }
+.f > label {
+  width: 34px; flex: none; font-size: 10.5px; color: var(--fg-dim); text-align: right;
+}
+.f input, .f textarea {
+  flex: 1; min-width: 0;
+  background: var(--bg3); border: 1px solid transparent; border-radius: 4px;
+  color: var(--fg); font: 12px/1.45 inherit; padding: 3px 6px; outline: none;
+  user-select: text;
+}
+.f input:focus, .f textarea:focus { border-color: var(--accent); background: var(--bg); }
+.f.tgt input { font-weight: 600; color: var(--fg); }
+.f.cur input { color: var(--fg-dim); }
+.f.keyf input { font-family: var(--mono); font-size: 11px; color: var(--warn); }
+.f textarea { resize: none; overflow: hidden; min-height: 24px; }
+.f .cp {
+  flex: none; background: var(--bg3); border: 1px solid var(--line); color: var(--fg-dim);
+  border-radius: 4px; width: 24px; height: 23px; cursor: pointer; font-size: 11px; padding: 0;
+}
+.f .cp:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* 명령어 행 */
+.row.cmd textarea.code {
+  display: block; width: 100%; margin: 0;
+  background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+  color: #b8e986; font: calc(var(--monosz) - 1px)/var(--monolh) var(--mono);
+  padding: 6px 7px; outline: none;
+  min-height: 26px;
+  resize: vertical; overflow: auto;          /* 길면 스크롤, 모서리를 끌어 높이 조절 */
+  user-select: text; white-space: pre;
+}
+.row.cmd textarea.code:focus { border-color: var(--accent); }
+body[data-theme="light"] .row.cmd textarea.code { color: #1d6b2f; }
+.cmdfoot { display: flex; align-items: flex-start; gap: 6px; margin-top: 4px; }
+.resolved {
+  flex: 1; min-width: 0; font: calc(var(--monosz) - 2px)/var(--monolh) var(--mono);
+  color: var(--warn); background: rgba(255,182,72,.08); border-radius: 4px;
+  padding: 4px 6px; white-space: pre-wrap; word-break: break-all; user-select: text;
+  max-height: 120px; overflow: auto;
+}
+.resolved:empty { display: none; }
+.copycmd {
+  flex: none; background: var(--accent); border: 0; color: #fff;
+  border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 11px; font-weight: 600;
+}
+.copycmd:hover { filter: brightness(1.12); }
+
+/* 미완료만 보기 */
+#rows.only-undone .row.done { display: none; }
+
+/* ---------- 하단 추가바 ---------- */
+#addbar {
+  display: flex; gap: 5px; padding: 6px 8px;
+  border-top: 1px solid var(--line); background: var(--bg2);
+}
+.addbtn {
+  flex: 1; background: var(--bg3); border: 1px solid var(--line); color: var(--fg-dim);
+  border-radius: var(--radius); padding: 5px 0; cursor: pointer; font-size: 11.5px;
+}
+.addbtn:hover { color: var(--accent); border-color: var(--accent); }
+
+/* ---------- 팝업 메뉴 ---------- */
+.popup {
+  position: fixed; z-index: 100;
+  background: var(--bg2); border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.45);
+  padding: 5px; min-width: 210px; max-width: 94vw;
+  max-height: 86vh; overflow-y: auto;
+}
+.popup.hidden { display: none; }
+.popup .mi {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  background: transparent; border: 0; color: var(--fg); text-align: left;
+  padding: 6px 9px; border-radius: 5px; cursor: pointer; font-size: 12px;
+}
+.popup .mi:hover { background: var(--bg3); }
+.popup .mi .ic { width: 15px; text-align: center; color: var(--fg-dim); font-size: 12px; }
+.popup .mi .tag { margin-left: auto; font-size: 10px; color: var(--fg-dim); }
+.popup .mi.danger:hover { background: var(--danger); color: #fff; }
+.popup .sep { height: 1px; background: var(--line); margin: 4px 2px; }
+.popup .hd { font-size: 10px; color: var(--fg-dim); padding: 5px 9px 2px; text-transform: uppercase; letter-spacing: .6px; }
+
+/* ---------- 토스트 ---------- */
+#toast {
+  position: fixed; left: 50%; bottom: 52px; transform: translateX(-50%) translateY(14px);
+  background: #000d; color: #fff; padding: 7px 14px; border-radius: 18px;
+  font-size: 12px; opacity: 0; pointer-events: none; transition: all .18s; z-index: 200;
+  max-width: 90%; text-align: center;
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* 입력 요소는 텍스트 선택 허용 */
+input, textarea { user-select: text; -webkit-user-select: text; }
+
+/* ---------- 표 ---------- */
+.row.tbl .tblwrap {
+  overflow-x: auto; overflow-y: hidden;
+  margin: 6px 0 0 20px; padding-bottom: 3px;
+}
+.row.tbl .tblwrap::-webkit-scrollbar { height: 7px; }
+.row.tbl .tblwrap::-webkit-scrollbar-thumb { background: var(--bg3); border-radius: 4px; }
+.row.tbl .tblwrap::-webkit-scrollbar-thumb:hover { background: var(--line); }
+
+.row.tbl .grid {
+  display: grid;
+  grid-template-columns: 24px repeat(var(--cols), minmax(82px, 1fr));
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  overflow: hidden;
+  min-width: min-content;
+}
+.row.tbl .corner, .row.tbl .colh, .row.tbl .rowh {
+  background: var(--bg3); color: var(--fg-dim);
+  font-size: 10px; font-weight: 600;
+  display: grid; place-items: center;
+  cursor: pointer; user-select: none; min-height: 19px;
+}
+.row.tbl .corner:hover, .row.tbl .colh:hover, .row.tbl .rowh:hover {
+  background: var(--accent); color: #fff;
+}
+.row.tbl input.cell {
+  background: var(--bg); border: 0; outline: none; color: var(--fg);
+  font: 12px/1.3 inherit; padding: 4px 6px; min-width: 0; width: 100%;
+  user-select: text;
+}
+.row.tbl input.cell:focus {
+  background: var(--accent-dim);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.row.tbl input.cell.hd { font-weight: 700; background: var(--bg3); }
+
+.row.tbl .tblfoot {
+  display: flex; gap: 3px; align-items: center;
+  margin: 5px 0 1px 20px;
+}
+.row.tbl .tblfoot button {
+  background: var(--bg3); border: 1px solid var(--line); color: var(--fg-dim);
+  border-radius: 4px; font-size: 10.5px; padding: 2px 6px; cursor: pointer;
+  font-family: inherit; white-space: nowrap;
+}
+.row.tbl .tblfoot button:hover { color: var(--accent); border-color: var(--accent); }
+.row.tbl .tblfoot button.on { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
+.row.tbl .tblfoot button.prim { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+.row.tbl .tblfoot button.prim:hover { filter: brightness(1.12); color: #fff; }
+.row.tbl .tblfoot .sp { flex: 1; }
+
+/* ---------- 표 크기 선택기 ---------- */
+.gridpick {
+  display: grid; grid-template-columns: repeat(8, 17px);
+  gap: 3px; padding: 8px 10px 5px;
+}
+.gridpick .gp {
+  width: 17px; height: 14px; border-radius: 2px;
+  border: 1px solid var(--line); background: var(--bg3); cursor: pointer;
+}
+.gridpick .gp.on { background: var(--accent); border-color: var(--accent); }
+.gplabel { text-align: center; font-size: 11px; color: var(--fg-dim); padding-bottom: 7px; }
+.gpman {
+  display: flex; align-items: center; gap: 4px;
+  padding: 7px 10px 5px; border-top: 1px solid var(--line);
+  font-size: 11px; color: var(--fg-dim);
+}
+.gpman input {
+  width: 44px; background: var(--bg3); border: 1px solid var(--line);
+  color: var(--fg); border-radius: 4px; padding: 2px 5px; font: inherit;
+}
+.gpman button {
+  margin-left: auto; background: var(--accent); color: #fff; border: 0;
+  border-radius: 4px; padding: 3px 9px; cursor: pointer; font-size: 11px; font-family: inherit;
+}
+.gpman button:hover { filter: brightness(1.12); }
+
+/* ---------- 업데이트 알림 바 ---------- */
+#updbar {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 6px 6px 10px;
+  background: linear-gradient(90deg, var(--accent-dim), transparent);
+  border-bottom: 1px solid var(--accent);
+  font-size: 11.5px; color: var(--fg);
+}
+#updbar.hidden { display: none; }
+#updbar .utext { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#updbar .ubtn {
+  flex: none; background: var(--accent); color: #fff; border: 0;
+  border-radius: 4px; padding: 3px 10px; cursor: pointer; font-size: 11px; font-weight: 600;
+  font-family: inherit;
+}
+#updbar .ubtn:hover { filter: brightness(1.12); }
+#updbar .ubtn:disabled { opacity: .5; cursor: default; }
+#updbar .uclose {
+  flex: none; background: transparent; border: 0; color: var(--fg-dim);
+  cursor: pointer; width: 20px; height: 20px; border-radius: 4px; font-family: inherit;
+}
+#updbar .uclose:hover { background: var(--bg3); color: var(--fg); }
+
+/* ---------- 설정 폼 (팝업 안) ---------- */
+.setform { padding: 4px 10px 9px; min-width: 300px; }
+.setform label { display: block; font-size: 10.5px; color: var(--fg-dim); margin: 6px 0 3px; }
+.setform .rowline { display: flex; gap: 4px; }
+.setform input[type="text"] {
+  flex: 1; min-width: 0; background: var(--bg3); border: 1px solid var(--line);
+  color: var(--fg); border-radius: 4px; padding: 5px 7px; font: 11.5px Consolas, monospace;
+  outline: none;
+}
+.setform input[type="text"]:focus { border-color: var(--accent); }
+.setform .browse {
+  flex: none; background: var(--bg3); border: 1px solid var(--line); color: var(--fg-dim);
+  border-radius: 4px; width: 28px; cursor: pointer; font-family: inherit;
+}
+.setform .browse:hover { color: var(--accent); border-color: var(--accent); }
+.setform .chkline {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11.5px; color: var(--fg); margin-top: 9px; cursor: pointer;
+}
+.setform .chkline input { accent-color: var(--accent); margin: 0; }
+.setform .hintline {
+  font-size: 10.5px; color: var(--fg-dim); line-height: 1.6;
+  background: var(--bg3); border-radius: 5px; padding: 7px 8px; margin-top: 9px;
+}
+.setform .hintline b { color: var(--warn); }
+.setform .btnline { display: flex; gap: 5px; justify-content: flex-end; margin-top: 10px; }
+.setform .btnline button {
+  background: var(--bg3); border: 1px solid var(--line); color: var(--fg-dim);
+  border-radius: 4px; padding: 4px 11px; cursor: pointer; font-size: 11.5px; font-family: inherit;
+}
+.setform .btnline button:hover { color: var(--fg); border-color: var(--fg-dim); }
+.setform .btnline button.prim {
+  background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600;
+}
+.setform .btnline button.prim:hover { filter: brightness(1.12); color: #fff; }
+
+/* ---------- 상단 메뉴 바 ---------- */
+#menubar {
+  display: flex; align-items: stretch;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--line);
+  min-height: 25px;
+  padding: 0 4px;
+}
+#menubar .mb {
+  background: transparent; border: 0; color: var(--fg);
+  font: 12px inherit; padding: 0 10px; cursor: pointer;
+  border-radius: 4px; margin: 2px 1px; white-space: nowrap;
+}
+#menubar .mb:hover { background: var(--bg3); }
+#menubar .mb.on { background: var(--accent); color: #fff; }
+
+/* ---------- 글(텍스트) 블록 ---------- */
+.row.txt textarea.memo {
+  display: block; width: 100%; margin: 0;
+  background: var(--bg3); border: 1px solid var(--line); border-radius: 5px;
+  color: var(--fg); font: var(--monosz)/var(--monolh) var(--mono);
+  padding: 7px 9px; outline: none;
+  min-height: 28px;
+  resize: vertical; overflow: auto;          /* 길면 스크롤, 모서리를 끌어 높이 조절 */
+  white-space: pre; user-select: text;
+}
+.row.txt textarea.memo:focus { border-color: var(--accent); background: var(--bg); }
+.row.txt .txtfoot { display: flex; align-items: flex-start; gap: 5px; margin-top: 5px; }
+.row.txt .txtfoot .resolved { flex: 1; font-family: inherit; font-size: 11.5px; }
+.row.txt .txtfoot button,
+.cmdfoot .zoombtn {
+  flex: none; background: var(--bg3); border: 1px solid var(--line); color: var(--fg-dim);
+  border-radius: 4px; padding: 4px 9px; cursor: pointer; font-size: 11px; font-family: inherit;
+  white-space: nowrap;
+}
+.row.txt .txtfoot button:hover,
+.cmdfoot .zoombtn:hover { color: var(--accent); border-color: var(--accent); }
+.row.txt .txtfoot button.prim {
+  background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600;
+}
+.row.txt .txtfoot button.prim:hover { filter: brightness(1.12); color: #fff; }
+
+/* ---------- 크게 열어 편집 ---------- */
+#zoom {
+  position: fixed; left: 6px; right: 6px; top: 6px; bottom: 6px;
+  z-index: 150; display: flex; flex-direction: column;
+  background: var(--bg2); border: 1px solid var(--accent); border-radius: 8px;
+  box-shadow: 0 14px 40px rgba(0,0,0,.55);
+}
+#zoom.hidden { display: none; }
+#zoom .zhead {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 8px 7px 11px; border-bottom: 1px solid var(--line);
+}
+#zoom .ztitle {
+  flex: 1; min-width: 0; font-weight: 700; font-size: 12.5px; color: var(--fg);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+#zoom .zcopy, #zoom .zclose {
+  flex: none; background: var(--bg3); border: 1px solid var(--line); color: var(--fg-dim);
+  border-radius: 4px; padding: 3px 9px; cursor: pointer; font-size: 11px; font-family: inherit;
+}
+#zoom .zcopy:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+#zoom .zclose { padding: 3px 8px; }
+#zoom .zclose:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
+#zoom .zbody {
+  flex: 1; margin: 8px; padding: 10px 12px;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
+  color: var(--fg); font: var(--monosz)/var(--monolh) var(--mono);
+  outline: none; resize: none; white-space: pre; overflow: auto; user-select: text;
+  tab-size: 4;
+}
+#zoom .zbody:focus { border-color: var(--accent); }
+#zoom .zfoot {
+  display: flex; align-items: center; gap: 5px;
+  padding: 0 8px 8px; 
+}
+#zoom .zhint { flex: 1; font-size: 10.5px; color: var(--fg-dim); }
+#zoom .zfoot button {
+  background: var(--bg3); border: 1px solid var(--line); color: var(--fg-dim);
+  border-radius: 4px; padding: 5px 14px; cursor: pointer; font-size: 12px; font-family: inherit;
+}
+#zoom .zfoot button:hover { color: var(--fg); border-color: var(--fg-dim); }
+#zoom .zfoot button.prim {
+  background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600;
+}
+#zoom .zfoot button.prim:hover { filter: brightness(1.12); color: #fff; }
+
+/* ---------- 작업 화면 / 설정 화면 ---------- */
+.chip.mode { font-weight: 600; }
+.chip.mode.on { background: var(--warn); color: #231a08; border-color: var(--warn); }
+
+/* 작업 화면: 틀을 고치는 요소는 감추고 값만 보이게 */
+body.mode-work .handle,
+body.mode-work .acts,
+body.mode-work .f.keyf,
+body.mode-work #addbar,
+body.mode-work .row.tbl .tblfoot button[data-act^="tbl-row"],
+body.mode-work .row.tbl .tblfoot button[data-act^="tbl-col"],
+body.mode-work .row.tbl .tblfoot button[data-act="tbl-header"],
+body.mode-work .row.tbl .tblfoot .sp { display: none; }
+
+body.mode-work .row { padding: 4px 7px; margin: 3px 0; }
+body.mode-work .fields { margin-left: 21px; gap: 2px; }
+body.mode-work .section { margin: 8px 0 3px; }
+body.mode-work .f > label { width: 30px; font-size: 10px; }
+body.mode-work #rows { padding-bottom: 14px; }
+
+/* 설정 화면임을 한눈에 */
+body.mode-edit #rows { background:
+  repeating-linear-gradient(135deg, transparent, transparent 14px, rgba(255,182,72,.035) 14px, rgba(255,182,72,.035) 28px); }
+body.mode-edit .row { border-left-color: var(--line); }
+
+/* 작업 화면: {{키}} 가 들어간 글·명령은 '완성된 결과'만 보여준다
+   (원문은 설정 화면에서 고친다) */
+body.mode-work .row.txt:has(.resolved:not(:empty)) .docwrap,
+body.mode-work .row.cmd:has(.resolved:not(:empty)) .docwrap { display: none; }
+
+body.mode-work .row.txt .resolved {
+  background: var(--bg3); color: var(--fg);
+  font: 12.5px/1.7 inherit; padding: 8px 10px; border-radius: 5px;
+  border-left: 3px solid var(--warn); max-height: none;
+}
+body.mode-work .row.cmd .resolved {
+  background: var(--code-bg); color: #b8e986;
+  font: calc(var(--monosz) - 1.5px)/var(--monolh) var(--mono);
+  padding: 7px 8px; border-left: 3px solid var(--warn); max-height: none;
+}
+body[data-theme="light"].mode-work .row.cmd .resolved { color: #1d6b2f; }
+body.mode-work .row.txt .txtfoot,
+body.mode-work .cmdfoot {
+  flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 5px;
+}
+body.mode-work .row.txt .txtfoot .resolved,
+body.mode-work .cmdfoot .resolved { flex: 1 1 100%; }   /* 치환 미리보기는 한 줄 전체 */
+body.mode-work .row.txt .txtfoot button,
+body.mode-work .cmdfoot button { margin-top: 4px; }
+
+/* 설정 화면에서는 줄 조작 버튼을 항상 보이게 (찾기 쉽도록) */
+body.mode-edit .acts { opacity: .75; }
+body.mode-edit .row:hover .acts,
+body.mode-edit .section:hover .acts,
+body.mode-edit .row:focus-within .acts { opacity: 1; }
+body.mode-edit .acts button.del { color: var(--danger); }
+
+/* 작업 화면에서도 마우스를 올리면 '⋯' 와 삭제는 쓸 수 있게 */
+body.mode-work .acts { display: flex; opacity: 0; }
+body.mode-work .row:hover .acts, body.mode-work .section:hover .acts { opacity: .85; }
+body.mode-work .acts button[data-act="up"],
+body.mode-work .acts button[data-act="down"],
+body.mode-work .acts button[data-act="note"] { display: none; }
+
+/* ---------- 탭 닫기 버튼 ---------- */
+.tab { position: relative; padding-right: 7px; }
+.tab .tclose {
+  flex: none; display: none;
+  width: 16px; height: 16px; margin-left: 1px;
+  background: transparent; border: 0; border-radius: 4px;
+  color: var(--fg-dim); font: 10px/1 inherit; cursor: pointer;
+  place-items: center; padding: 0;
+}
+.tab:hover .tclose, .tab.active .tclose { display: grid; }
+.tab .tclose:hover { background: var(--danger); color: #fff; }
+
+/* ---------- 일반 글(txt) 탭 ---------- */
+#zoom { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+#zoom.hidden { display: none; }
+#rows.hidden { display: none; }
+body.is-doc #addbar,
+body.is-doc #toolbar { display: none; }
+
+#zoom .docwrap { position: relative; flex: 1; min-height: 0; }
+#zoom .colsel { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+#zoom .colsel .csl {
+  position: absolute;
+  background: rgba(77, 163, 255, .32);
+  outline: 1px solid var(--accent);
+}
+#zoom textarea.doctext {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  background: var(--bg); border: 0; outline: none; resize: none;
+  color: var(--fg);
+  font: var(--monosz)/var(--monolh) var(--mono);
+  padding: 10px 12px;
+  tab-size: 4; -moz-tab-size: 4;
+  white-space: pre; overflow: auto; user-select: text;
+}
+#zoom textarea.doctext::selection { background: rgba(77, 163, 255, .35); }
+
+#zoom .docbar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 8px; border-top: 1px solid var(--line); background: var(--bg2);
+  font-size: 11px; color: var(--fg-dim);
+}
+#zoom .docbar .pos { font-variant-numeric: tabular-nums; }
+#zoom .docbar .pos.on { color: var(--accent); font-weight: 700; }
+#zoom .docbar .sp { flex: 1; }
+#zoom .docbar .hint { color: var(--fg-dim); opacity: .75; }
+#zoom .docbar .ltools {
+  background: var(--bg3); border: 1px solid var(--line); color: var(--fg-dim);
+  border-radius: 4px; padding: 3px 9px; cursor: pointer; font: 11px inherit;
+}
+#zoom .docbar .ltools:hover { color: var(--accent); border-color: var(--accent); }
+
+.tab.isdoc .tcount { background: rgba(255,182,72,.18); color: var(--warn); }
+
+/* ---------- 글 탭: 찾은 글자 강조 ---------- */
+#zoom .hilite { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+#zoom .hilite .hil {
+  position: absolute;
+  background: rgba(255, 182, 72, .30);
+  border-radius: 2px;
+}
+#zoom .hilite .hil.cur {
+  background: rgba(255, 182, 72, .55);
+  outline: 1px solid var(--warn);
+}
+
+/* 열 편집 모드일 때 */
+#zoom.colmode textarea.doctext { cursor: crosshair; }
+#zoom .docbar .cmode {
+  background: var(--bg3); border: 1px solid var(--line); color: var(--fg-dim);
+  border-radius: 4px; padding: 3px 9px; cursor: pointer; font: 11px inherit;
+}
+#zoom .docbar .cmode:hover { color: var(--accent); border-color: var(--accent); }
+#zoom .docbar .cmode.on {
+  background: var(--warn); color: #231a08; border-color: var(--warn); font-weight: 700;
+}
+
+/* ---------- 글 탭: 찾기 줄 ---------- */
+#zoom .findwrap {
+  border-top: 1px solid var(--line);
+  background: var(--bg2);
+  padding: 5px 6px;
+}
+#zoom .findwrap.hidden { display: none; }
+#zoom .findwrap .frow { display: flex; align-items: center; gap: 4px; }
+#zoom .findwrap .rrow { display: none; margin-top: 4px; }
+#zoom .findwrap.with-repl .rrow { display: flex; }
+#zoom .findwrap input[type="text"] {
+  flex: 1; min-width: 0;
+  background: var(--bg3); border: 1px solid var(--line); color: var(--fg);
+  border-radius: 4px; padding: 4px 7px; outline: none;
+  font: 12px Consolas, "D2Coding", monospace;
+}
+#zoom .findwrap input[type="text"]:focus { border-color: var(--accent); background: var(--bg); }
+#zoom .findwrap .fcount {
+  flex: none; min-width: 52px; text-align: center;
+  font-size: 11px; color: var(--fg-dim); font-variant-numeric: tabular-nums;
+}
+#zoom .findwrap .fcount.none { color: var(--danger); }
+#zoom .findwrap button {
+  flex: none; background: var(--bg3); border: 1px solid var(--line); color: var(--fg-dim);
+  border-radius: 4px; padding: 4px 8px; cursor: pointer; font: 11px inherit; white-space: nowrap;
+}
+#zoom .findwrap button:hover { color: var(--accent); border-color: var(--accent); }
+#zoom .findwrap .fclose:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
+#zoom .findwrap .fcslab {
+  flex: none; display: flex; align-items: center; gap: 3px;
+  font-size: 11px; color: var(--fg-dim); cursor: pointer;
+  border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px;
+}
+#zoom .findwrap .fcslab input { accent-color: var(--accent); margin: 0; }
+
+/* ---------- 하위 메뉴 ---------- */
+#menu2 { z-index: 110; }
+.popup .mi.hassub { padding-right: 6px; }
+.popup .mi .arrow {
+  margin-left: auto; font-size: 9px; color: var(--fg-dim); padding-left: 8px;
+}
+.popup .mi.hassub:hover { background: var(--accent-dim); color: var(--accent); }
+.popup .mi.hassub:hover .arrow { color: var(--accent); }
+/* 하위 메뉴가 열려 있는 항목은 계속 켜져 보이게 (어디서 펼쳐졌는지 알 수 있도록) */
+.popup .mi.hassub.subopen { background: var(--accent-dim); color: var(--accent); }
+.popup .mi.hassub.subopen .arrow { color: var(--accent); }
+.popup .mi.hassub .tag + .arrow { margin-left: 6px; }
+
+/* ---------- 크게 열기 = 전체 편집기 ---------- */
+#zoom .docwrap { position: relative; flex: 1; min-height: 0; margin: 8px 8px 0; }
+#zoom .hilite, #zoom .colsel { position: absolute; inset: 0; pointer-events: none; }
+#zoom .hilite { z-index: 1; }
+#zoom .colsel { z-index: 2; }
+#zoom textarea.doctext {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
+  color: var(--fg); outline: none; resize: none;
+  font: var(--monosz)/var(--monolh) var(--mono);
+  padding: 10px 12px; tab-size: 4; -moz-tab-size: 4;
+  white-space: pre; overflow: auto; user-select: text;
+}
+#zoom textarea.doctext:focus { border-color: var(--accent); }
+#zoom.colmode textarea.doctext { cursor: crosshair; }
+
+#zoom .docbar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px 2px; font-size: 11px; color: var(--fg-dim);
+}
+#zoom .docbar .pos { font-variant-numeric: tabular-nums; }
+#zoom .docbar .pos.on { color: var(--accent); font-weight: 700; }
+#zoom .docbar .sp { flex: 1; }
+#zoom .docbar button {
+  background: var(--bg3); border: 1px solid var(--line); color: var(--fg-dim);
+  border-radius: 4px; padding: 3px 9px; cursor: pointer; font: 11px inherit;
+}
+#zoom .docbar button:hover { color: var(--accent); border-color: var(--accent); }
+#zoom .docbar .cmode.on { background: var(--warn); color: #231a08; border-color: var(--warn); font-weight: 700; }
+
+#zoom .findwrap { margin: 6px 8px 0; border: 1px solid var(--line); border-radius: 6px; }
+#zoom .zfile {
+  background: var(--bg3); border: 1px solid var(--line); color: var(--fg-dim);
+  border-radius: 4px; padding: 5px 12px; cursor: pointer; font: 12px inherit;
+}
+#zoom .zfile:hover { color: var(--accent); border-color: var(--accent); }
+
+/* 인코딩 표시 버튼 */
+#zoom .docbar .zenc { font-variant-numeric: tabular-nums; }
+#zoom .docbar .zenc.warn { color: var(--warn); border-color: var(--warn); }
+
+/* 편집기 안의 찾기 버튼 */
+#zoom .docbar .zfind { font-weight: 600; }
+#zoom .docbar .zfind:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* 파일 내에서 찾기 대화상자 */
+.setform.fif { min-width: 330px; }
+.setform.fif input[type="text"] { font: 12px inherit; }
+.setform.fif .hintline { line-height: 1.7; }
+
+/* 끌어서 패널 아래 끝에 닿았을 때 (놓으면 패널 높이에 맞춰짐) */
+.row textarea.willsnap {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  box-shadow: 0 0 0 3px rgba(77, 163, 255, .18);
+}
+
+/* ---------- 진행 표시 바 ---------- */
+#prog {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 6px 6px 10px;
+  background: linear-gradient(90deg, rgba(255,182,72,.18), transparent);
+  border-bottom: 1px solid var(--warn);
+  font-size: 11.5px; color: var(--fg);
+}
+#prog.hidden { display: none; }
+#prog .ptext { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#prog .spin {
+  flex: none; width: 12px; height: 12px; border-radius: 50%;
+  border: 2px solid rgba(255,182,72,.3); border-top-color: var(--warn);
+  animation: jjspin .7s linear infinite;
+}
+@keyframes jjspin { to { transform: rotate(360deg); } }
+#prog .pcancel {
+  flex: none; background: var(--bg3); border: 1px solid var(--line); color: var(--fg-dim);
+  border-radius: 4px; padding: 3px 10px; cursor: pointer; font: 11px inherit;
+}
+#prog .pcancel:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
+
+
+/* ================= 파일 내에서 찾기 결과 ================= */
+.row.res .resbox {
+  margin: 4px 0 0;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--code-bg);
+  font-size: 12px;
+  min-height: 120px;
+}
+.row.res .reshead {
+  position: sticky; top: 0; z-index: 2;
+  padding: 6px 8px;
+  background: var(--bg3);
+  border-bottom: 1px solid var(--line);
+}
+.row.res .reshead b { color: var(--accent); }
+.row.res .reshead .rcount { float: right; color: var(--fg-dim); font-size: 11px; }
+.row.res .ressub {
+  clear: both;
+  margin-top: 3px;
+  color: var(--fg-dim);
+  font-size: 11px;
+  word-break: break-all;
+}
+.row.res .resnone { padding: 14px 10px; color: var(--fg-dim); }
+
+.row.res .resfile {
+  padding: 6px 8px 3px;
+  margin-top: 4px;
+  border-top: 1px solid var(--line);
+  cursor: pointer;
+}
+.row.res .resfile .fn { font-weight: 600; color: var(--fg); }
+.row.res .resfile .fp {
+  display: block;
+  color: var(--fg-dim);
+  font-size: 10.5px;
+  word-break: break-all;
+}
+.row.res .resfile:hover .fn { text-decoration: underline; color: var(--accent); }
+
+.row.res .reshit {
+  display: flex;
+  gap: 8px;
+  padding: 2px 8px 2px 16px;
+  cursor: pointer;
+  font-family: var(--mono);
+  line-height: var(--monolh);
+  white-space: pre;
+  overflow: hidden;
+}
+.row.res .reshit .ln {
+  flex: 0 0 52px;
+  text-align: right;
+  color: var(--fg-dim);
+  user-select: none;
+}
+.row.res .reshit .lt { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; }
+.row.res .reshit:hover { background: var(--bg3); }
+.row.res .reshit:hover .lt { text-decoration: underline; color: var(--accent); }
+.row.res .reshit:hover .ln { color: var(--accent); }
+.row.res .reshit:active { background: var(--accent-dim); }
+
+
+/* ================= 블록 안에서 바로 열 편집 ================= */
+.row .docwrap { position: relative; margin: 5px 0 0; }
+.row .docwrap > .colsel,
+.row .docwrap > .hilite {
+  position: absolute; inset: 0; pointer-events: none; overflow: hidden;
+  border-radius: 5px;
+}
+.row .docwrap > .hilite { z-index: 1; }
+.row .docwrap > .colsel { z-index: 2; }
+.row .docwrap .csl {
+  position: absolute;
+  background: rgba(77, 163, 255, .32);
+  outline: 1px solid var(--accent);
+}
+.row .docwrap .hil {
+  position: absolute;
+  background: rgba(255, 182, 72, .30);
+  border-radius: 2px;
+}
+/* 열 편집 중인 칸은 한눈에 보이게 */
+.row .docwrap.colmode textarea { cursor: crosshair; border-color: var(--accent); }
+.row .docwrap.colmode::after {
+  content: '열 편집';
+  position: absolute; right: 8px; top: 4px; z-index: 3;
+  background: var(--accent); color: #fff;
+  font-size: 10px; padding: 1px 6px; border-radius: 3px;
+  pointer-events: none; opacity: .85;
+}

@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline';">
+<title>짱디터 트리거</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    overflow: hidden; cursor: pointer; user-select: none;
+    background: linear-gradient(180deg, #4da3ff 0%, #2a6fb3 100%);
+  }
+  #dots {
+    position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    width: 3px; height: 54px; border-radius: 3px;
+    background: rgba(255, 255, 255, .6);
+  }
+  body:hover { filter: brightness(1.25); }
+</style>
+</head>
+<body title="짱디터 열기">
+  <div id="dots"></div>
+  <script src="trigger.js"></script>
+</body>
+</html>

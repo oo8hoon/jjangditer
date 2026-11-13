@@ -1,0 +1,24 @@
+# 빌드 산출물 (릴리스에 첨부하지, 저장소에는 넣지 않는다)
+dist/
+build/
+node_modules/
+
+# WebView2 SDK DLL — 빌드할 때 nuget 에서 자동으로 받아온다 (저장소에 안 넣음)
+host/lib/
+
+# 개인 템플릿 / 작업 샘플 — 회사 정보가 들어갈 수 있으므로 절대 올리지 않는다
+templates/
+*.jjt
+*.jjw
+
+# 임시 · 점검 파일
+_*.txt
+_*.log
+*.bak
+*.tmp
+
+# 에디터 / OS
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;">
+<title>짱디터</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- 숨겨졌을 때 화면 우측 끝에 남는 트리거 띠 -->
+  <div id="strip" title="짱디터 열기"><span class="stripdots"></span></div>
+
+  <div id="panel">
+    <div id="resizer" title="드래그하여 폭 조절"></div>
+
+    <header id="titlebar">
+      <div class="brand drag">짱디터<span class="ver"></span></div>
+      <div class="spacer drag"></div>
+      <button id="btnPin" class="tb" title="우측 고정 / 자동 숨김 (Alt+Shift+J)">📌</button>
+      <button id="btnHide" class="tb" title="트레이로 숨기기">－</button>
+      <button id="btnMax" class="tb" title="화면 전체로 (제목줄 두 번 눌러도 됩니다)">⬜</button>
+      <button id="btnClose" class="tb danger" title="종료">✕</button>
+    </header>
+
+    <div id="menubar"></div>
+
+    <div id="prog" class="hidden">
+      <span class="spin"></span>
+      <span class="ptext"></span>
+      <button class="pcancel">취소</button>
+    </div>
+
+    <div id="updbar" class="hidden">
+      <span class="utext"></span>
+      <button class="ubtn">업데이트</button>
+      <button class="uclose" title="닫기">✕</button>
+    </div>
+
+    <div id="tabbar">
+      <div id="tabs"></div>
+      <button id="btnAddTab" class="tb" title="새 탭">＋</button>
+    </div>
+
+    <div id="toolbar">
+      <div id="progressWrap"><div id="progressBar"></div></div>
+      <span id="progressText">0 / 0</span>
+      <button id="btnMode" class="chip mode" title="작업 화면 / 설정 화면 전환 (Ctrl+D)">작업</button>
+      <button id="btnFilter" class="chip" title="미완료만 보기">미완료만</button>
+      <button id="btnNext" class="chip" title="다음 할 항목으로 이동">다음 ▾</button>
+    </div>
+
+    <main id="rows"></main>
+
+    <footer id="addbar">
+      <button class="addbtn" data-add="item">＋ 항목</button>
+      <button class="addbtn" data-add="cmd">＋ 명령</button>
+      <button class="addbtn" data-add="text">＋ 글</button>
+      <button class="addbtn" data-add="table">＋ 표</button>
+      <button class="addbtn" data-add="section">＋ 섹션</button>
+    </footer>
+  </div>
+
+  <div id="zoom" class="hidden">
+    <div class="zhead">
+      <span class="ztitle"></span>
+      <button class="zcopy" title="값이 채워진 상태로 복사">⧉ 복사</button>
+      <button class="zclose" title="닫기 (Esc)">✕</button>
+    </div>
+
+    <div class="docwrap">
+      <div class="hilite"></div>
+      <div class="colsel"></div>
+      <textarea class="doctext" spellcheck="false" wrap="off"
+                placeholder="여기에 글을 쓰거나 붙여넣으세요."></textarea>
+    </div>
+
+    <div class="findwrap hidden">
+      <div class="frow">
+        <input class="fq" type="text" placeholder="찾을 내용" spellcheck="false">
+        <span class="fcount"></span>
+        <button class="fprev" title="이전 (Shift+F3)">▲</button>
+        <button class="fnext" title="다음 (F3)">▼</button>
+        <label class="fcslab" title="대소문자 구분"><input type="checkbox" class="fcs"> Aa</label>
+        <button class="ftoggle" title="바꾸기 칸 열기/닫기">바꾸기</button>
+        <button class="fclose" title="닫기 (Esc)">✕</button>
+      </div>
+      <div class="frow rrow">
+        <input class="fr" type="text" placeholder="바꿀 내용" spellcheck="false">
+        <button class="frep">바꾸기</button>
+        <button class="frepall">모두 바꾸기</button>
+      </div>
+    </div>
+
+    <div class="docbar">
+      <span class="pos">1행 1열</span>
+      <span class="len"></span>
+      <span class="sp"></span>
+      <button class="zfind" title="찾기 / 바꾸기 (Ctrl+F)">🔎 찾기</button>
+      <button class="zenc" title="글자 인코딩 (파일 저장에 쓰입니다)">UTF-8</button>
+      <button class="cmode" title="열 편집 모드 켜고 끄기 (Alt+C)">열 편집</button>
+      <button class="ltools" title="줄 단위 일괄 작업">줄 도구</button>
+    </div>
+
+    <div class="zfoot">
+      <span class="zhint">Ctrl+F 찾기 · Alt+C 열 편집 · Esc 닫기</span>
+      <button class="zfile" title="텍스트 파일로 저장 (Ctrl+S)">파일로 저장</button>
+      <button class="zfileas" title="다른 이름으로 저장 (Ctrl+Shift+S)">다른 이름으로…</button>
+      <button class="zsave prim">닫기</button>
+    </div>
+  </div>
+
+  <div id="menu" class="popup hidden"></div>
+  <div id="menu2" class="popup hidden"></div>
+  <div id="toast"></div>
+
+  <script src="jj-bridge.js"></script>
+  <script src="templates.js"></script>
+  <script src="doc.js"></script>
+  <script src="renderer.js"></script>
+</body>
+</html>
