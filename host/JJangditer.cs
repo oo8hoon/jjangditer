@@ -64,6 +64,19 @@ namespace JJ
             {
                 if (!first) { Native.PokeExisting(); return; }
 
+                // https 로 업데이트를 받으려면 TLS 1.2 이상이 필요하다.
+                // (.NET Framework 기본값은 SSL3/TLS1.0 이라 요즘 서버에 연결되지 않는다)
+                try
+                {
+                    ServicePointManager.SecurityProtocol |=
+                        SecurityProtocolType.Tls12 | (SecurityProtocolType)12288;   // 12288 = TLS 1.3
+                }
+                catch
+                {
+                    try { ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12; }
+                    catch { }
+                }
+
                 Native.SetDpiAware();
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
