@@ -1557,6 +1557,14 @@ async function openAnyFile() {
 function tabMenu(id, x, y) {
   const tab = ws.tabs.find((t) => t.id === id);
   if (!tab) return;
+
+  // 이 탭이 파일과 연결돼 있는지 / 저장 안 한 내용이 있는지
+  const files = fileRowsOf(tab);
+  const dirty = unsavedFileRows(tab);
+  const saveTag = dirty.length ? '● 변경됨' : (files.length ? '저장됨' : '파일 없음');
+  // 파일을 연 탭이면 '닫기' (파일은 그대로 남는다), 아니면 '삭제'
+  const closeLabel = files.length ? '탭 닫기' : '탭 삭제';
+
   openPopup([
     { hd: tab.name },
     { icon: '✎', label: '이름 변경', onClick: () => renameTabInline(id) },
@@ -1568,6 +1576,15 @@ function tabMenu(id, x, y) {
         const nt = normTab({ name: uniqueName(tab.name), rows: tab.rows.map((r) => normRow(Object.assign({}, r, { id: null, done: false }))) });
         addTab(nt);
       } },
+    { sep: true },
+    {
+      icon: '💾', label: '파일 저장', tag: saveTag,
+      onClick: () => saveTabFile(id, false)
+    },
+    {
+      icon: '📝', label: '다른 이름으로 저장…', tag: 'Ctrl+Shift+S',
+      onClick: () => saveTabFile(id, true)
+    },
     { sep: true },
     { icon: '⬆', label: '이 탭 내보내기 (.jjt)', onClick: () => exportTab(id) },
     { icon: '⧉', label: '텍스트로 복사', onClick: () => copyText(tabToMarkdown(tab)) },
@@ -1581,7 +1598,11 @@ function tabMenu(id, x, y) {
         if (i >= 0 && i < ws.tabs.length - 1) { const t = ws.tabs.splice(i, 1)[0]; ws.tabs.splice(i + 1, 0, t); render(); saveNow(); }
       } },
     { sep: true },
-    { icon: '✕', label: '탭 삭제', danger: true, onClick: () => deleteTab(id) }
+    {
+      icon: '✕', label: closeLabel, danger: true,
+      tag: files.length ? '파일은 남습니다' : '',
+      onClick: () => deleteTab(id)
+    }
   ], x, y);
 }
 
@@ -2149,12 +2170,62 @@ function currentTextRow() {
 }
 
 /** 저장 대화상자에 넣을 기본 파일 이름 */
-function suggestName(row) {
+function suggestName(row, tab) {
   if (row.filePath) {
     const base = row.filePath.split(/[\\/]/).pop();
     return base.replace(/\.[^.]+$/, '');
   }
-  return row.label || activeTab().name || '새 파일';
+  const t = tab || activeTab();
+  return row.label || (t && t.name) || '새 파일';
+}
+
+/** 그 탭에서 파일로 열어 둔 글 블록 */
+function fileRowsOf(tab) {
+  return tab ? tab.rows.filter((r) => r.type === 'text' && r.filePath && !r.results) : [];
+}
+
+/** 그 탭에서 저장 대상이 될 글 블록 하나 */
+function saveRowOf(tab) {
+  const f = fileRowsOf(tab);
+  if (f.length) return f[0];
+  return tab ? tab.rows.find((r) => r.type === 'text' && !r.results) : null;
+}
+
+/**
+ * 탭 하나를 파일로 저장한다. 지금 보고 있는 탭이 아니어도 된다.
+ * (보고 있는 탭이면 커서를 지켜 주는 기존 흐름을 그대로 쓴다)
+ */
+async function saveTabFile(id, asNew) {
+  const tab = ws.tabs.find((t) => t.id === id);
+  if (!tab) return;
+  // 저장할 글이 아예 없으면 먼저 알려 준다
+  // (Ctrl+S 는 이때 작업공간을 저장하지만, 메뉴의 '파일 저장' 은 그러면 안 된다)
+  const row = saveRowOf(tab);
+  if (!row) { toast('이 탭에는 저장할 글이 없습니다'); return; }
+
+  if (tab.id === ws.activeTabId && !zoomCtx) { await saveCurrentFile(asNew); return; }
+
+  const enc = row.encoding || 'UTF-8';
+  busy = true;
+  let r;
+  if (!asNew && row.filePath) r = await window.jj.saveTextTo(row.filePath, row.text, enc);
+  else r = await window.jj.saveTextAs(suggestName(row, tab), row.text, enc);
+  busy = false;
+  if (!r || !r.ok) return;
+
+  row.filePath = r.path || row.filePath;
+  row.encoding = row.encoding || 'UTF-8';
+  row.savedText = row.text;
+
+  const base = row.filePath.split(/[\\/]/).pop();
+  if (asNew || !row.label) {
+    row.label = base;
+    if (tab.rows.length === 1) tab.name = uniqueName(base, tab.id);
+  }
+  pushRecent('file', base, row.filePath);
+  render();
+  scheduleSave();
+  toast('저장했습니다 (' + row.encoding + '): ' + row.filePath);
 }
 
 /**
