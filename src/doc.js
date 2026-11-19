@@ -17,6 +17,9 @@
   let hilBox = null;       // 찾은 글자 강조
   let rect = null;         // { l1, c1, l2, c2 }  (c 는 화면상의 칸 번호)
   let dragging = false;
+  const SNAP_GAP = 700;         // 이만큼 쉬었다 치면 되돌리기 단계를 끊는다
+  let typePre = null;           // 글자가 들어가기 직전 상태
+  let lastSnapAt = 0;
   let composing = false;        // 한글 등 IME 조합 중
   let imeBefore = null;         // 조합 시작 전 상태 (네모에 넣을 때 되돌리려고)
   let colMode = false;     // Alt+C 로 켜는 열 편집 모드
@@ -129,9 +132,20 @@
     undoStack.push({ text: ta.value, start: ta.selectionStart, end: ta.selectionEnd });
     if (undoStack.length > UNDO_MAX) undoStack.shift();
     redoStack.length = 0;
+    typePre = null;             // 타이핑 기록과 겹치지 않게
+    lastSnapAt = Date.now();
+  }
+
+  /** 타이핑 직전 상태를 되돌리기 기록에 넣는다 */
+  function pushTyped(pre) {
+    undoStack.push(pre);
+    if (undoStack.length > UNDO_MAX) undoStack.shift();
+    redoStack.length = 0;
   }
   function restore(stackFrom, stackTo) {
-    if (!stackFrom.length) return;
+    if (!stackFrom.length) return false;
+    typePre = null;
+    lastSnapAt = 0;             // 되돌린 뒤 친 글자는 새 단계로
     stackTo.push({ text: ta.value, start: ta.selectionStart, end: ta.selectionEnd });
     const s = stackFrom.pop();
     ta.value = s.text;
@@ -139,6 +153,7 @@
     clearRect();
     pushToModel();
     runFind(false);
+    return true;
   }
   const undo = () => restore(undoStack, redoStack);
   const redo = () => restore(redoStack, undoStack);
@@ -479,8 +494,29 @@
     if (ta.dataset.jjbound === '1') { drawRect(); updateStatus(); return true; }
     ta.dataset.jjbound = '1';
 
-    ta.addEventListener('input', () => {
+    // 글자가 들어가기 '직전' 상태를 잡아 둔다
+    ta.addEventListener('beforeinput', () => {
+      if (rect) return;                    // 네모 편집은 따로 기록한다
+      if (composing && typePre) return;    // 조합 중에는 맨 처음 것만 유지
+      typePre = { text: ta.value, start: ta.selectionStart, end: ta.selectionEnd };
+    });
+
+    ta.addEventListener('input', (e) => {
       if (composing) { pushToModel(); return; }   // 조합 중에는 네모를 그대로 둔다
+
+      // 보통 타이핑도 Ctrl+Z 로 되돌릴 수 있게 기록한다.
+      // 빠르게 이어 친 글자는 한 덩어리로 묶는다.
+      if (typePre) {
+        const t = e && e.inputType ? e.inputType : '';
+        const big = t === 'insertFromPaste' || t === 'deleteByCut' ||
+                    t === 'insertLineBreak' || t === 'insertParagraph' ||
+                    t === 'historyUndo' || t === 'historyRedo';
+        const now = Date.now();
+        if (big || !undoStack.length || now - lastSnapAt > SNAP_GAP) pushTyped(typePre);
+        lastSnapAt = now;
+        typePre = null;
+      }
+
       clearRect(); pushToModel(); runFind(false);
     });
 
@@ -498,7 +534,17 @@
       composing = false;
       const saved = imeBefore;
       imeBefore = null;
-      if (!saved) { clearRect(); pushToModel(); runFind(false); return; }
+      if (!saved) {
+        // 조합으로 들어간 글자도 되돌릴 수 있게
+        if (typePre) {
+          const now = Date.now();
+          if (!undoStack.length || now - lastSnapAt > SNAP_GAP) pushTyped(typePre);
+          lastSnapAt = now;
+          typePre = null;
+        }
+        clearRect(); pushToModel(); runFind(false);
+        return;
+      }
 
       const typed = e.data || '';
       ta.value = saved.text;                 // 조합이 끼워 넣은 글자를 되돌리고
@@ -545,8 +591,15 @@
       if (e.key === 'F3') { e.preventDefault(); if (find.matches.length) gotoMatch(find.idx + (e.shiftKey ? -1 : 1)); return; }
       if (e.key === 'Escape' && find.open && !rect) { e.preventDefault(); closeFind(); return; }
 
-      if (ctrl && e.code === 'KeyZ' && !e.shiftKey) { e.preventDefault(); undo(); return; }
-      if (ctrl && (e.code === 'KeyY' || (e.code === 'KeyZ' && e.shiftKey))) { e.preventDefault(); redo(); return; }
+      // 되돌릴 기록이 없으면 가로채지 않는다 (브라우저 기본 되돌리기에 맡김)
+      if (ctrl && e.code === 'KeyZ' && !e.shiftKey) {
+        if (undoStack.length) { e.preventDefault(); undo(); }
+        return;
+      }
+      if (ctrl && (e.code === 'KeyY' || (e.code === 'KeyZ' && e.shiftKey))) {
+        if (redoStack.length) { e.preventDefault(); redo(); }
+        return;
+      }
 
       // Alt 와 함께 누른 글자는 편집 내용에 들어가지 않게 막는다
       if (e.altKey && !ctrl && e.key && e.key.length === 1) { e.preventDefault(); return; }
@@ -666,6 +719,8 @@
   /* ---------- 바깥에서 쓰는 것 ---------- */
   window.JJDoc = {
     bind: bind,
+    /** 되돌릴 수 있는 단계 수 */
+    undoDepth: function () { return undoStack.length; },
     /** 되돌리기 / 다시 하기 */
     undo: function () { if (ta) undo(); },
     redo: function () { if (ta) redo(); },

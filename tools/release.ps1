@@ -127,8 +127,11 @@ if ($ReleaseOnly) {
     $dirty = @(git status --porcelain)
     if ($dirty.Count -gt 0) { Warn "작업트리에 변경 $($dirty.Count)건 — 함께 커밋됩니다" }
 
-    $pkg.version = $Version
-    ($pkg | ConvertTo-Json -Depth 20) | Set-Content $pkgPath -Encoding UTF8
+    # JSON 을 통째로 다시 쓰지 않고 버전 문자열만 바꾼다.
+    # (Set-Content 는 BOM 을 붙이고, 그러면 node 의 JSON.parse 가 실패한다)
+    $txt = [IO.File]::ReadAllText($pkgPath)
+    $txt = [regex]::Replace($txt, '"version"\s*:\s*"[^"]+"', '"version": "' + $Version + '"', 1)
+    [IO.File]::WriteAllText($pkgPath, $txt, (New-Object Text.UTF8Encoding $false))
     Good 'package.json 갱신'
 }
 $Tag = "v$Version"
