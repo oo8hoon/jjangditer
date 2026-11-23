@@ -246,11 +246,23 @@ $base = "https://github.com/$Owner/$Repo/releases/latest/download"
 $tmp = Join-Path $env:TEMP ("jjrel_" + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory $tmp | Out-Null
 try {
-    $lj = Invoke-RestMethod -Uri "$base/latest.json" -UseBasicParsing
+    # GitHub 의 latest 주소는 잠시 예전 내용을 돌려줄 수 있다. 몇 번 더 물어본다.
+    $lj = $null
+    foreach ($try in 1..10) {
+        try {
+            $bust = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+            $lj = Invoke-RestMethod -Uri "$base/latest.json?t=$bust" -UseBasicParsing `
+                                    -Headers @{ 'Cache-Control' = 'no-cache' }
+            if ($lj.version -eq $Version) { break }
+        } catch { }
+        Start-Sleep -Seconds 3
+    }
+    if (-not $lj) { Die 'latest.json 을 읽지 못했습니다.' }
     if ($lj.version -ne $Version) { Die "latest.json 버전이 다릅니다: $($lj.version)" }
     Good "latest.json → $($lj.version)"
 
-    Invoke-WebRequest -Uri "$base/$($lj.file)" -OutFile "$tmp\dl.exe" -UseBasicParsing
+    $bust = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+    Invoke-WebRequest -Uri "$base/$($lj.file)?t=$bust" -OutFile "$tmp\dl.exe" -UseBasicParsing
     $h1 = (Get-FileHash "$tmp\dl.exe" -Algorithm SHA256).Hash.ToLower()
     if ($h1 -ne $lj.sha256) { Die "내려받은 파일 해시가 다릅니다." }
     if ($h1 -ne (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()) { Die "원본과 다릅니다." }
