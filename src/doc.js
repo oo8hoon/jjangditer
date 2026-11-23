@@ -28,7 +28,10 @@
   const redoStack = [];
 
   const find = { q: '', cs: false, matches: [], idx: -1, open: false, repl: false,
-                 hl: false };   // hl = 찾은 곳을 칠해 둘지 (찾기 줄을 안 열어도 칠한다)
+                 hl: false,     // 찾은 곳을 칠해 둘지
+                 word: false,   // 낱말 단위로만
+                 re: false,     // 정규식
+                 bad: false };  // 정규식이 틀렸을 때
 
   /** 지금 붙어 있는 곳 안에서 찾는다 (없으면 null) */
   function q(sel) { return root ? root.querySelector(sel) : null; }
@@ -264,20 +267,57 @@
   }
 
   /* ---------- 찾기 ---------- */
+  /** 정규식에서 특별한 뜻을 가진 글자를 그대로 찾도록 막아 준다 */
+  function escRe(t) { return t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+  /**
+   * 글에서 찾을 말이 있는 자리를 모두 찾아 준다.
+   *   opt = { q, cs, word, re }
+   * 정규식이 틀렸으면 null 을 돌려준다.
+   */
+  function matchList(text, opt) {
+    const qq = opt.q;
+    if (!qq) return [];
+    const out = [];
+
+    if (opt.re || opt.word) {
+      let rx;
+      try {
+        const body = opt.re ? qq : ('\\b' + escRe(qq) + '\\b');
+        rx = new RegExp(body, opt.cs ? 'g' : 'gi');
+      } catch (e) {
+        return null;                       // 정규식이 틀렸다
+      }
+      let m, guard = 0;
+      while ((m = rx.exec(text)) !== null) {
+        if (m[0].length === 0) { rx.lastIndex++; if (++guard > 50000) break; continue; }
+        out.push({ start: m.index, end: m.index + m[0].length });
+        if (out.length > 20000) break;
+      }
+      return out;
+    }
+
+    const hay = opt.cs ? text : text.toLowerCase();
+    const needle = opt.cs ? qq : qq.toLowerCase();
+    let i = 0;
+    for (;;) {
+      const at = hay.indexOf(needle, i);
+      if (at < 0) break;
+      out.push({ start: at, end: at + needle.length });
+      i = at + needle.length;
+      if (out.length > 20000) break;
+    }
+    return out;
+  }
+
   function runFind(move) {
     find.matches = [];
     find.idx = -1;
+    find.bad = false;
     if (find.q) {
-      const text = find.cs ? ta.value : ta.value.toLowerCase();
-      const q = find.cs ? find.q : find.q.toLowerCase();
-      let i = 0;
-      while (q.length) {
-        const at = text.indexOf(q, i);
-        if (at < 0) break;
-        find.matches.push({ start: at, end: at + q.length });
-        i = at + q.length;
-        if (find.matches.length > 20000) break;
-      }
+      const got = matchList(ta.value, find);
+      if (got === null) { find.bad = true; }
+      else find.matches = got;
       if (find.matches.length) {
         find.hl = true;
         const caret = ta.selectionStart;
@@ -835,12 +875,47 @@
     text: function () { return ta ? ta.value : ''; },
     openFind: function (withReplace) { if (ta) return openFind(withReplace); return false; },
     /** 찾을 말을 정하고 바로 찾는다. 찾은 개수를 돌려준다 */
-    setFind: function (text, cs) {
+    setFind: function (text, opt) {
       if (!ta) return 0;
+      opt = opt || {};
       find.q = text == null ? '' : String(text);
-      find.cs = !!cs;
+      find.cs = !!opt.cs;
+      find.word = !!opt.word;
+      find.re = !!opt.re;
+      if (opt.hl === false) find.hl = false;
       runFind(false);
       return find.matches.length;
+    },
+    /** 정규식이 틀렸는지 */
+    badRe: function () { return !!find.bad; },
+    /** 칠하기 켜고 끄기 */
+    setHilite: function (on) { find.hl = !!on; drawHighlights(); },
+    /** 지금 글에서 찾은 자리들 (밖에서 세어 볼 때) */
+    listIn: function (text, opt) { return matchList(text, opt || {}); },
+    /** 지금 글 칸의 내용 */
+    text2: function () { return ta ? ta.value : ''; },
+    /** 고른 자리를 다른 글로 바꾼다 (바꾸기용) */
+    replaceRange: function (start, end, to) {
+      if (!ta) return;
+      snapshot();
+      ta.value = ta.value.slice(0, start) + to + ta.value.slice(end);
+      ta.setSelectionRange(start + to.length, start + to.length);
+      pushToModel();
+      runFind(false);
+    },
+    /** 이 글에서 모두 바꾸기. 바꾼 개수를 돌려준다 */
+    replaceAllHere: function (to) {
+      if (!ta || !find.q) return 0;
+      const ms = matchList(ta.value, find);
+      if (!ms || !ms.length) return 0;
+      snapshot();
+      let out = '', last = 0;
+      for (const m of ms) { out += ta.value.slice(last, m.start) + to; last = m.end; }
+      out += ta.value.slice(last);
+      ta.value = out;
+      pushToModel();
+      runFind(false);
+      return ms.length;
     },
     /** k 번째 결과로 간다 */
     gotoIndex: function (k) { if (ta && find.matches.length) gotoMatch(k); },

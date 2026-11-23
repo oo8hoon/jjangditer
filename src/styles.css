@@ -957,77 +957,106 @@ body.is-doc #toolbar { display: none; }
   margin: 0 4px;
 }
 
-/* ================= 상단 찾기 줄 ================= */
-#findbar {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 6px;
-  background: var(--bg3);
-  border-bottom: 1px solid var(--accent);
-  flex: none;
-}
-#findbar.hidden { display: none; }
 
-#findbar .fscope {
-  flex: none;
+
+/* ================= 찾기 / 바꾸기 창 =================
+   떠 있는 작은 창. 열려 있어도 뒤의 글은 그대로 고칠 수 있다. */
+#finddlg {
+  position: fixed;
+  z-index: 200;
+  width: 420px;
+  max-width: calc(100vw - 16px);
   background: var(--bg2);
   border: 1px solid var(--line);
-  border-radius: 4px;
-  color: var(--fg-dim);
-  cursor: pointer;
-  font-size: 11px;
-  padding: 3px 8px;
-  white-space: nowrap;
-}
-#findbar .fscope:hover { border-color: var(--accent); color: var(--accent); }
-#findbar .fscope.on { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
-
-#findbar .fq {
-  flex: 1;
-  min-width: 0;
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  color: var(--fg);
-  font: 12px var(--mono);
-  padding: 3px 7px;
-  outline: none;
-}
-#findbar .fq:focus { border-color: var(--accent); }
-
-#findbar .fcount {
-  flex: none;
-  min-width: 72px;
-  text-align: right;
-  font-size: 10.5px;
-  color: var(--fg-dim);
-  white-space: nowrap;
-}
-#findbar .fcount.none { color: var(--danger); }
-
-#findbar button:not(.fscope) {
-  flex: none;
-  background: transparent;
-  border: 0;
-  border-radius: 4px;
-  color: var(--fg-dim);
-  cursor: pointer;
-  font-size: 11px;
-  padding: 3px 6px;
-  line-height: 1;
-}
-#findbar button:not(.fscope):hover { background: var(--accent-dim); color: var(--accent); }
-#findbar .fclose:hover { background: var(--danger); color: #fff; }
-
-#findbar .fcslab {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  font-size: 10.5px;
-  color: var(--fg-dim);
-  cursor: pointer;
+  border-radius: 7px;
+  box-shadow: 0 10px 34px rgba(0, 0, 0, .55);
+  font-size: 11.5px;
   user-select: none;
 }
-#findbar .fcslab input { margin: 0; }
+#finddlg.hidden { display: none; }
+
+#finddlg .fdhead {
+  display: flex; align-items: center;
+  padding: 5px 6px 5px 10px;
+  background: var(--bg3);
+  border-bottom: 1px solid var(--line);
+  border-radius: 6px 6px 0 0;
+  cursor: move;
+}
+#finddlg .fdtitle { flex: 1; font-weight: 600; color: var(--fg); }
+#finddlg .fdclose {
+  background: transparent; border: 0; color: var(--fg-dim);
+  cursor: pointer; font-size: 12px; padding: 2px 6px; border-radius: 4px;
+}
+#finddlg .fdclose:hover { background: var(--danger); color: #fff; }
+
+#finddlg .fdtabs { display: flex; gap: 2px; padding: 6px 8px 0; }
+#finddlg .fdtab {
+  background: transparent; border: 1px solid transparent; border-bottom: 0;
+  border-radius: 5px 5px 0 0; color: var(--fg-dim);
+  cursor: pointer; font-size: 11.5px; padding: 4px 14px;
+}
+#finddlg .fdtab:hover { color: var(--accent); }
+#finddlg .fdtab.on {
+  background: var(--bg); border-color: var(--line);
+  color: var(--accent); font-weight: 600;
+}
+
+#finddlg .fdbody {
+  padding: 8px 10px 10px;
+  background: var(--bg);
+  border-top: 1px solid var(--line);
+  border-radius: 0 0 6px 6px;
+}
+
+#finddlg .fdline { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+#finddlg .fdline label { flex: none; width: 58px; color: var(--fg-dim); }
+#finddlg .fdline input[type="text"] {
+  flex: 1; min-width: 0;
+  background: var(--bg3); border: 1px solid var(--line); border-radius: 4px;
+  color: var(--fg); font: 12px var(--mono); padding: 3px 7px; outline: none;
+  user-select: text;
+}
+#finddlg .fdline input[type="text"]:focus { border-color: var(--accent); background: var(--bg); }
+
+/* '바꿀 내용' 과 바꾸기 단추는 바꾸기 탭에서만 */
+#finddlg .replonly { display: none; }
+#finddlg.repl .replonly { display: flex; }
+#finddlg.repl button.replonly { display: block; }
+
+#finddlg .fdmain { display: flex; gap: 10px; margin-top: 4px; }
+#finddlg .fdopts { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+#finddlg .fdopts label,
+#finddlg .fdbox label {
+  display: flex; align-items: center; gap: 5px;
+  color: var(--fg-dim); cursor: pointer; white-space: nowrap;
+}
+#finddlg .fdopts label:hover,
+#finddlg .fdbox label:hover { color: var(--fg); }
+#finddlg input[type="checkbox"],
+#finddlg input[type="radio"] { margin: 0; }
+
+#finddlg .fdside { flex: none; display: flex; flex-direction: column; gap: 6px; }
+#finddlg .fdbox {
+  border: 1px solid var(--line); border-radius: 5px;
+  padding: 4px 8px 5px; display: flex; flex-direction: column; gap: 3px;
+}
+#finddlg .fdlegend { color: var(--fg-dim); font-size: 10px; margin-bottom: 1px; }
+
+#finddlg .fdbtns { flex: none; display: flex; flex-direction: column; gap: 4px; width: 92px; }
+#finddlg .fdbtns button {
+  background: var(--bg3); border: 1px solid var(--line); border-radius: 4px;
+  color: var(--fg); cursor: pointer; font-size: 11px; padding: 4px 0;
+}
+#finddlg .fdbtns button:hover { border-color: var(--accent); color: var(--accent); }
+#finddlg .fdbtns button.prim {
+  background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600;
+}
+#finddlg .fdbtns button.prim:hover { filter: brightness(1.1); color: #fff; }
+
+#finddlg .fdstat {
+  margin-top: 8px; padding-top: 6px;
+  border-top: 1px solid var(--line);
+  color: var(--fg-dim); font-size: 10.5px; min-height: 13px;
+}
+#finddlg .fdstat.bad { color: var(--danger); }

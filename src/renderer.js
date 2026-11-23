@@ -1190,23 +1190,35 @@ function tabToMarkdown(tab) {
 }
 
 
-/* ================= 상단 찾기 줄 =================
- * 블록 아래가 아니라 늘 같은 자리(위)에 뜬다.
- * 범위를 '이 글' / '이 탭' 으로 고를 수 있다.
+/* ================= 찾기 / 바꾸기 창 =================
+ * 떠 있는 작은 창. 열려 있어도 뒤의 글은 그대로 고칠 수 있다.
  */
 const fb = {
   open: false,
-  scope: 'row',        // 'row' = 이 글, 'tab' = 이 탭 전체
-  q: '',
-  cs: false,
-  hits: [],            // [{ rowId, field, k }]  k = 그 글 안에서 몇 번째
+  mode: 'find',        // 'find' | 'repl'
+  hits: [],            // [{ rowId, field, k }]
   i: -1,
-  rowId: null          // '이 글' 일 때 대상
+  moved: false,
+  rowId: null,
+  placed: false
 };
 
-function fbEl(sel) { return document.querySelector('#findbar ' + sel); }
+function fdEl(sel) { return document.querySelector('#finddlg ' + sel); }
 
-/** 지금 찾기 대상이 될 글 블록 (커서가 있는 칸 > 이 탭의 첫 글) */
+/** 창에서 고른 찾기 조건 */
+function fdOpt() {
+  return {
+    q: fdEl('.fq').value,
+    cs: fdEl('.fcs').checked,
+    word: fdEl('.fword').checked,
+    re: fdEl('.fre').checked,
+    hl: fdEl('.fhl').checked
+  };
+}
+function fdScopeTab() { return fdEl('.fstab').checked; }
+function fdDirUp() { return fdEl('.fup').checked; }
+
+/** 지금 찾기 대상이 될 글 블록 */
 function findTargetRow() {
   const el = document.activeElement;
   const ta = el && el.closest ? el.closest('textarea.memo, textarea.code') : null;
@@ -1224,142 +1236,196 @@ function findTargetRow() {
 
 function fieldOf(row) { return row.type === 'cmd' ? 'cmd' : 'text'; }
 
-/** 그 블록의 글 칸 (없으면 null) */
 function taOf(rowId, field) {
   return document.querySelector('#rows .row[data-id="' + rowId + '"] textarea[data-field="' +
     (field || 'text') + '"]');
 }
 
-function openFindBar(preset) {
+function fdStat(msg, bad) {
+  const el = fdEl('.fdstat');
+  el.textContent = msg || '';
+  el.classList.toggle('bad', !!bad);
+}
+
+/** 창을 처음 열 때 가운데 위쪽에 놓는다 */
+function placeDialog() {
+  if (fb.placed) return;
+  const d = $('#finddlg');
+  const w = d.getBoundingClientRect().width || 420;
+  d.style.left = Math.max(8, Math.round((window.innerWidth - w) / 2)) + 'px';
+  d.style.top = '120px';
+  fb.placed = true;
+}
+
+function openFindDlg(mode, preset) {
   const row = findTargetRow();
   if (!row) { toast('이 탭에는 찾을 글이 없습니다'); return; }
   fb.rowId = row.id;
   fb.open = true;
-  $('#findbar').classList.remove('hidden');
-  fbEl('.fscope').textContent = fb.scope === 'tab' ? '이 탭' : '이 글';
+  fb.mode = mode || fb.mode || 'find';
 
-  const qi = fbEl('.fq');
+  const d = $('#finddlg');
+  d.classList.remove('hidden');
+  d.classList.toggle('repl', fb.mode === 'repl');
+  fdEl('.fdtitle').textContent = fb.mode === 'repl' ? '바꾸기' : '찾기';
+  $$('#finddlg .fdtab').forEach((b) => b.classList.toggle('on', b.dataset.t === fb.mode));
+  placeDialog();
+
+  const qi = fdEl('.fq');
   const pick = preset || (window.JJDoc.selText ? window.JJDoc.selText() : '');
   if (pick) qi.value = pick;
   qi.focus();
   qi.select();
-  runFindBar(false);
+  refreshFind(false);
 }
 
-function closeFindBar() {
+function closeFindDlg() {
   fb.open = false;
-  fb.hits = []; fb.i = -1;
-  $('#findbar').classList.add('hidden');
+  fb.hits = []; fb.i = -1; fb.moved = false;
+  $('#finddlg').classList.add('hidden');
   if (window.JJDoc.clearFind) window.JJDoc.clearFind();
   const row = fb.rowId && rowById(fb.rowId);
   if (row) { const t = taOf(row.id, fieldOf(row)); if (t) t.focus(); }
 }
 
-/** 한 글 안에서 찾을 말이 몇 번 나오는지 */
-function countIn(text, q, cs) {
-  if (!q) return 0;
-  const hay = cs ? text : text.toLowerCase();
-  const needle = cs ? q : q.toLowerCase();
-  let n = 0, i = 0;
-  for (;;) {
-    const at = hay.indexOf(needle, i);
-    if (at < 0) break;
-    n++; i = at + needle.length;
-    if (n > 20000) break;
+/** 찾을 대상이 되는 블록들 */
+function findRows() {
+  const tab = activeTab();
+  if (!tab) return [];
+  if (fdScopeTab()) {
+    return tab.rows.filter((r) => (r.type === 'text' && !r.results) || r.type === 'cmd');
   }
-  return n;
+  const r = rowById(fb.rowId);
+  return r ? [r] : [];
 }
 
-/** 찾기 목록을 다시 만든다 */
-function runFindBar(move) {
-  fb.q = fbEl('.fq').value;
-  fb.cs = fbEl('.fcs').checked;
+/** 목록을 다시 만든다 */
+function refreshFind(move) {
+  const opt = fdOpt();
   fb.hits = [];
   fb.i = -1;
-
-  const tab = activeTab();
-  if (!tab || !fb.q) { updateFindBarUI(); if (window.JJDoc.clearFind) window.JJDoc.clearFind(); return; }
-
-  const rows = fb.scope === 'tab'
-    ? tab.rows.filter((r) => (r.type === 'text' && !r.results) || r.type === 'cmd')
-    : [rowById(fb.rowId)].filter(Boolean);
-
-  for (const r of rows) {
-    const f = fieldOf(r);
-    const n = countIn(r[f] || '', fb.q, fb.cs);
-    for (let k = 0; k < n; k++) fb.hits.push({ rowId: r.id, field: f, k: k });
-  }
-
-  fb.i = fb.hits.length ? 0 : -1;
   fb.moved = false;
-  updateFindBarUI();
-  if (fb.hits.length && move !== false) gotoHit(0);
-  else if (fb.hits.length) {
-    // 입력 중에는 자리만 칠해 둔다
-    const first = fb.hits[0];
-    const t = taOf(first.rowId, first.field);
-    if (t) { bindDocTo(t); window.JJDoc.setFind(fb.q, fb.cs); }
+
+  if (!opt.q) { fdStat(''); if (window.JJDoc.clearFind) window.JJDoc.clearFind(); return; }
+
+  let bad = false;
+  for (const r of findRows()) {
+    const f = fieldOf(r);
+    const ms = window.JJDoc.listIn(r[f] || '', opt);
+    if (ms === null) { bad = true; break; }
+    for (let k = 0; k < ms.length; k++) fb.hits.push({ rowId: r.id, field: f, k: k });
   }
+
+  if (bad) { fdStat('정규식이 올바르지 않습니다', true); return; }
+
+  if (!fb.hits.length) { fdStat('찾지 못했습니다'); if (window.JJDoc.clearFind) window.JJDoc.clearFind(); return; }
+
+  fb.i = 0;
+  fdStat(fb.hits.length + '곳' + (fdScopeTab() ? ' (이 탭 전체)' : ''));
+
+  // 지금 블록에 칠해 둔다
+  const first = fb.hits[0];
+  const t = taOf(first.rowId, first.field);
+  if (t) {
+    bindDocTo(t);
+    window.JJDoc.setFind(opt.q, opt);
+    window.JJDoc.setHilite(opt.hl);
+  }
+  if (move) gotoHit(0);
 }
 
-function updateFindBarUI() {
-  const c = fbEl('.fcount');
-  if (!fb.q) { c.textContent = ''; c.classList.remove('none'); return; }
-  if (!fb.hits.length) { c.textContent = '없음'; c.classList.add('none'); return; }
-  c.classList.remove('none');
-  c.textContent = (fb.i + 1) + ' / ' + fb.hits.length +
-    (fb.scope === 'tab' ? ' (탭 전체)' : '');
-}
-
-/** n 번째 결과로 간다 */
 function gotoHit(n) {
   if (!fb.hits.length) return;
   fb.i = ((n % fb.hits.length) + fb.hits.length) % fb.hits.length;
   fb.moved = true;
   const h = fb.hits[fb.i];
-
   const t = taOf(h.rowId, h.field);
   if (!t) return;
-  t.focus();
-  bindDocTo(t);
-  window.JJDoc.setFind(fb.q, fb.cs);
-  window.JJDoc.gotoIndex(h.k);
-  updateFindBarUI();
 
-  // 다른 블록으로 넘어갔으면 그 블록이 보이게 한다
+  const opt = fdOpt();
+  bindDocTo(t);
+  window.JJDoc.setFind(opt.q, opt);
+  window.JJDoc.setHilite(opt.hl);
+  window.JJDoc.gotoIndex(h.k);
+
+  fdStat((fb.i + 1) + ' / ' + fb.hits.length + (fdScopeTab() ? ' (이 탭 전체)' : ''));
+
   const rowEl = t.closest('.row');
   if (rowEl) {
     const host = $('#rows');
     const rb = rowEl.getBoundingClientRect(), hb = host.getBoundingClientRect();
-    if (rb.top < hb.top || rb.bottom > hb.bottom) {
-      rowEl.scrollIntoView({ block: 'nearest' });
-    }
+    if (rb.top < hb.top || rb.bottom > hb.bottom) rowEl.scrollIntoView({ block: 'nearest' });
   }
 }
 
+/** 다음/이전 찾기 (방향은 창의 '방향' 을 따른다) */
 function findStep(dir) {
+  const d = dir != null ? dir : (fdDirUp() ? -1 : 1);
   if (!fb.open) {
-    // 찾기 줄이 닫혀 있으면 고른 낱말로 바로 찾는다
     const el = document.activeElement;
     const ta = el && el.closest ? el.closest('textarea.memo, textarea.code') : null;
     if (ta) bindDocTo(ta);
     const pick = window.JJDoc.selText ? window.JJDoc.selText() : '';
-    if (pick) { openFindBar(pick); return; }
-    if (!fb.q) return;
-    openFindBar(fb.q);
+    openFindDlg('find', pick || undefined);
     return;
   }
-  if (!fb.hits.length) { runFindBar(true); return; }
-  // 아직 한 번도 안 옮겼으면 첫 결과부터
+  if (!fb.hits.length) { refreshFind(true); return; }
   if (!fb.moved) { gotoHit(fb.i < 0 ? 0 : fb.i); return; }
-  gotoHit(fb.i + (dir < 0 ? -1 : 1));
+  gotoHit(fb.i + d);
 }
 
-/** 아이콘 줄 — 자주 쓰는 것만 */
+/** 지금 자리 하나만 바꾼다 */
+function replaceOne() {
+  if (!fb.hits.length) { refreshFind(true); return; }
+  if (!fb.moved) { gotoHit(fb.i < 0 ? 0 : fb.i); return; }
+  const h = fb.hits[fb.i];
+  const t = taOf(h.rowId, h.field);
+  if (!t) return;
+  const to = fdEl('.fr').value;
+  const start = t.selectionStart, end = t.selectionEnd;
+  if (end > start) {
+    bindDocTo(t);
+    window.JJDoc.replaceRange(start, end, to);
+    const row = rowById(h.rowId);
+    if (row) { row[h.field] = t.value; scheduleSave(); }
+  }
+  refreshFind(false);
+  if (fb.hits.length) gotoHit(Math.min(fb.i, fb.hits.length - 1));
+  else fdStat('모두 바꿨습니다');
+}
+
+/** 범위 안에서 모두 바꾼다 */
+function replaceAll() {
+  const opt = fdOpt();
+  if (!opt.q) return;
+  const to = fdEl('.fr').value;
+  const rows = findRows();
+  let total = 0, touched = 0;
+
+  for (const r of rows) {
+    const f = fieldOf(r);
+    const t = taOf(r.id, f);
+    if (!t) continue;
+    bindDocTo(t);
+    window.JJDoc.setFind(opt.q, opt);
+    const n = window.JJDoc.replaceAllHere(to);
+    if (n) { r[f] = t.value; total += n; touched++; }
+  }
+  if (total) { scheduleSave(); rerender(); }
+  refreshFind(false);          // 목록을 먼저 새로 만들고
+  if (total) {                 // 그 다음에 결과를 적는다 (안 그러면 지워진다)
+    fdStat(total + '곳을 바꿨습니다' + (touched > 1 ? ' (' + touched + '개 글)' : ''));
+    toast(total + '곳을 바꿨습니다');
+  } else {
+    fdStat('바꿀 내용을 찾지 못했습니다');
+  }
+}
+
+/** 메뉴 밑 아이콘 줄 — 자주 쓰는 것만 */
 function bindIconbar() {
   const bar = $('#iconbar');
   if (!bar) return;
-  bar.addEventListener('click', async (e) => {
+  bar.addEventListener('click', (e) => {
     const b = e.target.closest('button[data-ic]');
     if (!b) return;
     const row = findTargetRow();
@@ -1369,7 +1435,8 @@ function bindIconbar() {
       case 'open':   openTextFile(); break;
       case 'save':   saveCurrentFile(false); break;
       case 'saveas': saveCurrentFile(true); break;
-      case 'find':   openFindBar(); break;
+      case 'find':   openFindDlg('find'); break;
+      case 'repl':   openFindDlg('repl'); break;
       case 'fif':    openFindInFiles(window.innerWidth - 24, 60); break;
       case 'undo':   if (ta) { ta.focus(); bindDocTo(ta); } window.JJDoc.undo(); break;
       case 'redo':   if (ta) { ta.focus(); bindDocTo(ta); } window.JJDoc.redo(); break;
@@ -1393,24 +1460,63 @@ function bindIconbar() {
   });
 }
 
-function bindFindBar() {
-  const qi = fbEl('.fq');
-  qi.addEventListener('input', () => runFindBar(false));
-  qi.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); findStep(e.shiftKey ? -1 : 1); }
-    else if (e.key === 'Escape') { e.preventDefault(); closeFindBar(); }
+function bindFindDlg() {
+  const d = $('#finddlg');
+  if (!d) return;
+
+  // 제목줄을 끌어서 옮기기
+  let drag = null;
+  fdEl('.fdhead').addEventListener('mousedown', (e) => {
+    if (e.target.closest('button')) return;
+    const r = d.getBoundingClientRect();
+    drag = { dx: e.clientX - r.left, dy: e.clientY - r.top };
+    e.preventDefault();
   });
-  fbEl('.fnext').addEventListener('click', () => findStep(1));
-  fbEl('.fprev').addEventListener('click', () => findStep(-1));
-  fbEl('.fcs').addEventListener('change', () => runFindBar(false));
-  fbEl('.fclose').addEventListener('click', closeFindBar);
-  fbEl('.fscope').addEventListener('click', () => {
-    fb.scope = fb.scope === 'tab' ? 'row' : 'tab';
-    fbEl('.fscope').textContent = fb.scope === 'tab' ? '이 탭' : '이 글';
-    fbEl('.fscope').classList.toggle('on', fb.scope === 'tab');
-    toast(fb.scope === 'tab' ? '이 탭 전체에서 찾습니다' : '이 글에서만 찾습니다');
-    runFindBar(false);
+  document.addEventListener('mousemove', (e) => {
+    if (!drag) return;
+    const r = d.getBoundingClientRect();
+    const x = Math.max(0, Math.min(e.clientX - drag.dx, window.innerWidth - r.width));
+    const y = Math.max(0, Math.min(e.clientY - drag.dy, window.innerHeight - 40));
+    d.style.left = Math.round(x) + 'px';
+    d.style.top = Math.round(y) + 'px';
   });
+  document.addEventListener('mouseup', () => { drag = null; });
+
+  // 탭
+  $$('#finddlg .fdtab').forEach((b) => {
+    b.addEventListener('click', () => {
+      fb.mode = b.dataset.t;
+      d.classList.toggle('repl', fb.mode === 'repl');
+      fdEl('.fdtitle').textContent = fb.mode === 'repl' ? '바꾸기' : '찾기';
+      $$('#finddlg .fdtab').forEach((x) => x.classList.toggle('on', x === b));
+      (fb.mode === 'repl' ? fdEl('.fr') : fdEl('.fq')).focus();
+    });
+  });
+
+  fdEl('.fq').addEventListener('input', () => refreshFind(false));
+  ['.fcs', '.fword', '.fre', '.fhl'].forEach((sel) => {
+    fdEl(sel).addEventListener('change', () => refreshFind(false));
+  });
+  ['.fsrow', '.fstab'].forEach((sel) => {
+    fdEl(sel).addEventListener('change', () => refreshFind(false));
+  });
+
+  const onEnter = (e, fn) => {
+    if (e.key === 'Enter') { e.preventDefault(); fn(); }
+    else if (e.key === 'Escape') { e.preventDefault(); closeFindDlg(); }
+  };
+  fdEl('.fq').addEventListener('keydown', (e) => onEnter(e, () => findStep(e.shiftKey ? -1 : null)));
+  fdEl('.fr').addEventListener('keydown', (e) => onEnter(e, replaceOne));
+
+  fdEl('.fnext').addEventListener('click', () => findStep(null));
+  fdEl('.fcountall').addEventListener('click', () => {
+    refreshFind(false);
+    if (fb.hits.length) toast(fb.hits.length + '곳을 찾았습니다');
+  });
+  fdEl('.frep').addEventListener('click', replaceOne);
+  fdEl('.frepall').addEventListener('click', replaceAll);
+  fdEl('.fclose').addEventListener('click', closeFindDlg);
+  fdEl('.fdclose').addEventListener('click', closeFindDlg);
 }
 
 /* ================= 팝업 메뉴 ================= */
@@ -1555,9 +1661,9 @@ function helpItems() {
     { icon: '', label: 'Ctrl+K : 명령 추가' },
     { icon: '', label: 'Ctrl+M : 글(메모) 추가' },
     { icon: '', label: 'Ctrl+T : 표 추가' },
-    { icon: '', label: 'Ctrl+H : 찾아 바꾸기' },
+    { icon: '', label: 'Shift+F3 : 이전 찾기 · 낱말을 고르고 F3 이면 그 말로 찾기' },
     { icon: '', label: 'Ctrl+D : 작업 화면 ↔ 설정 화면' },
-    { icon: '', label: 'Ctrl+F : 미완료만 보기' },
+    { icon: '', label: 'Ctrl+F : 찾기 · Ctrl+H : 바꾸기 · F3 : 다음 찾기' },
     { icon: '', label: 'Ctrl+Tab : 다음 탭' },
     { icon: '', label: 'Ctrl+E : 현재 탭 내보내기' },
     { icon: '', label: 'Ctrl+S : 파일 저장 · Ctrl+Shift+S : 다른 이름으로 저장' },
@@ -1601,7 +1707,8 @@ function mainMenu(x, y) {
       } },
     { icon: '⧉', label: '현재 탭 전체 복사', onClick: () => copyText(tabToMarkdown(tab)) },
     { sep: true },
-    { icon: '🔁', label: '찾아 바꾸기…', tag: 'Ctrl+H', onClick: () => openReplace(window.innerWidth - 24, 60) },
+    { icon: '🔁', label: '찾기 / 바꾸기…', tag: 'Ctrl+H', onClick: () => openFindDlg('repl') },
+    { icon: '🗂', label: '모든 탭에서 바꾸기…', tag: '항목·탭 이름까지', onClick: () => openReplace(window.innerWidth - 24, 60) },
     { sep: true },
     { icon: '↺', label: '체크 모두 해제', onClick: async () => {
         busy = true;
@@ -1664,9 +1771,9 @@ function helpMenuOld() {
     { icon: '', label: 'Ctrl+K : 명령어 추가' },
     { icon: '', label: 'Ctrl+T : 표 추가' },
     { icon: '', label: 'Ctrl+M : 텍스트(메모) 추가' },
-    { icon: '', label: 'Ctrl+H : 찾아 바꾸기' },
+    { icon: '', label: 'Shift+F3 : 이전 찾기 · 낱말을 고르고 F3 이면 그 말로 찾기' },
     { icon: '', label: 'Ctrl+D : 작업 화면 ↔ 설정 화면' },
-    { icon: '', label: 'Ctrl+F : 미완료만 보기' },
+    { icon: '', label: 'Ctrl+F : 찾기 · Ctrl+H : 바꾸기 · F3 : 다음 찾기' },
     { icon: '', label: 'Ctrl+Tab : 다음 탭' },
     { icon: '', label: 'Ctrl+E : 현재 탭 내보내기' },
     { sep: true },
@@ -3103,7 +3210,7 @@ function bindRows() {
       const fta = holder.querySelector('textarea');
       if (fta) { fta.focus(); bindDocTo(fta); }
       fb.rowId = row.id;
-      openFindBar();
+      openFindDlg('find');
     } else if (act === 'zoom') {
       openZoom(row.id, btn.dataset.f, row.label);
     } else if (act === 'refind') {
@@ -3438,7 +3545,7 @@ function bindChrome() {
       return;
     }
     // 찾기 줄이 열려 있으면 Esc 로 닫는다
-    if (e.key === 'Escape' && fb.open) { e.preventDefault(); closeFindBar(); return; }
+    if (e.key === 'Escape' && fb.open) { e.preventDefault(); closeFindDlg(); return; }
     const ctrl = e.ctrlKey || e.metaKey;
 
     // Alt+C : 글·명령 칸에서 눌러도 그 자리에서 열 편집이 켜진다.
@@ -3477,7 +3584,8 @@ function bindChrome() {
     else if (k === 'd') { e.preventDefault(); $('#btnMode').click(); }
     else if (k === 'h') {
       e.preventDefault();
-      openReplace(window.innerWidth - 24, 60);
+      if (zoomCtx) { window.JJDoc.openFind(true); return; }
+      openFindDlg('repl');
     }
     else if (k === 't') {
       e.preventDefault();
@@ -3492,7 +3600,7 @@ function bindChrome() {
       e.preventDefault();
       // 편집기 안이면 편집기 찾기, 아니면 상단 찾기 줄
       if (zoomCtx) { window.JJDoc.openFind(false); return; }
-      openFindBar();
+      openFindDlg('find');
       return;
     }
     else if (k === 'e') { e.preventDefault(); exportTab(ws.activeTabId); }
@@ -3598,7 +3706,7 @@ function applyState(s) {
   render();
   bindRows();
   bindIconbar();
-  bindFindBar();
+  bindFindDlg();
   bindTabs();
   bindChrome();
   bindDock();
