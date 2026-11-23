@@ -917,3 +917,73 @@ body.is-doc #toolbar { display: none; }
   font-size: 10px; padding: 1px 6px; border-radius: 3px;
   pointer-events: none; opacity: .85;
 }
+
+
+/* ================= 블록 안 얇은 찾기 줄 ================= */
+.row .docwrap .findwrap.slim {
+  position: absolute;
+  right: 10px;
+  top: 6px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px 3px 6px;
+  background: var(--bg3);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, .45);
+}
+.row .docwrap .findwrap.slim.hidden { display: none; }
+
+.row .docwrap .findwrap.slim .fq {
+  width: 150px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  color: var(--fg);
+  font: 11.5px var(--mono);
+  padding: 2px 6px;
+  outline: none;
+}
+.row .docwrap .findwrap.slim .fq:focus { border-color: var(--accent); }
+
+.row .docwrap .findwrap.slim .fcount {
+  min-width: 44px;
+  text-align: center;
+  font-size: 10.5px;
+  color: var(--fg-dim);
+  white-space: nowrap;
+}
+.row .docwrap .findwrap.slim .fcount.none { color: var(--danger); }
+
+.row .docwrap .findwrap.slim button {
+  background: transparent;
+  border: 0;
+  color: var(--fg-dim);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 5px;
+  border-radius: 3px;
+  line-height: 1;
+}
+.row .docwrap .findwrap.slim button:hover { background: var(--accent-dim); color: var(--accent); }
+.row .docwrap .findwrap.slim .fclose:hover { background: var(--danger); color: #fff; }
+
+.row .docwrap .findwrap.slim .fcslab {
+  font-size: 10.5px;
+  color: var(--fg-dim);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  cursor: pointer;
+  user-select: none;
+}
+.row .docwrap .findwrap.slim .fcslab input { margin: 0; }
+
+/* 블록 안에서는 바꾸기 칸을 쓰지 않는다 */
+.row .docwrap .findwrap.slim .rrow { display: none; }
+
+/* 찾은 곳 칠하기 — 지금 보고 있는 곳은 더 진하게 */
+.row .docwrap .hil { background: rgba(255, 182, 72, .32); border-radius: 2px; }
+.row .docwrap .hil.cur { background: rgba(255, 182, 72, .62); outline: 1px solid var(--warn); }

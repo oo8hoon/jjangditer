@@ -588,7 +588,16 @@ function buildCmd(row, vars) {
     '</div>' +
     '<div class="docwrap"><div class="hilite"></div><div class="colsel"></div>' +
     '<textarea class="code" data-field="cmd" rows="1" wrap="off"' + heightAttr(row) +
-    ' placeholder="실행할 명령어 ( {{키}} 로 위 항목 값 참조 )" spellcheck="false">' + esc(row.cmd) + '</textarea></div>' +
+    ' placeholder="실행할 명령어 ( {{키}} 로 위 항목 값 참조 )" spellcheck="false">' + esc(row.cmd) + '</textarea>' +
+    '<div class="findwrap slim hidden">' +
+    '<input class="fq" type="text" placeholder="찾을 내용" spellcheck="false">' +
+    '<span class="fcount"></span>' +
+    '<button class="fprev" title="이전 (Shift+F3)">\u25b2</button>' +
+    '<button class="fnext" title="다음 (F3)">\u25bc</button>' +
+    '<label class="fcslab" title="대/소문자 구분"><input type="checkbox" class="fcs"> Aa</label>' +
+    '<button class="fclose" title="닫기 (Esc)">\u2715</button>' +
+    '</div>' +
+    '</div>' +
     '<div class="cmdfoot"><div class="resolved">' + esc(res !== row.cmd ? res : '') + '</div>' +
     '<button class="zoombtn" data-act="find" data-f="cmd" title="이 명령에서 찾기 (Ctrl+F)">🔎 찾기</button>' +
     '<button class="zoombtn" data-act="col" data-f="cmd" title="세로로 블록을 잡아 한꺼번에 고칩니다 (Alt+C)">▥ 열 편집</button>' +
@@ -659,7 +668,16 @@ function buildText(row, vars) {
     '</div>' +
     '<div class="docwrap"><div class="hilite"></div><div class="colsel"></div>' +
     '<textarea class="memo" data-field="text" rows="1" wrap="off"' + heightAttr(row) +
-    ' placeholder="내용을 입력하세요" spellcheck="false">' + esc(row.text) + '</textarea></div>' +
+    ' placeholder="내용을 입력하세요" spellcheck="false">' + esc(row.text) + '</textarea>' +
+    '<div class="findwrap slim hidden">' +
+    '<input class="fq" type="text" placeholder="찾을 내용" spellcheck="false">' +
+    '<span class="fcount"></span>' +
+    '<button class="fprev" title="이전 (Shift+F3)">\u25b2</button>' +
+    '<button class="fnext" title="다음 (F3)">\u25bc</button>' +
+    '<label class="fcslab" title="대/소문자 구분"><input type="checkbox" class="fcs"> Aa</label>' +
+    '<button class="fclose" title="닫기 (Esc)">\u2715</button>' +
+    '</div>' +
+    '</div>' +
     '<div class="txtfoot"><div class="resolved">' + esc(res !== row.text ? res : '') + '</div>' +
     '<button data-act="find" data-f="text" title="이 글에서 찾기 (Ctrl+F)">🔎 찾기</button>' +
     '<button data-act="col" data-f="text" title="세로로 블록을 잡아 한꺼번에 고칩니다 (Alt+C)">▥ 열 편집</button>' +
@@ -2853,7 +2871,14 @@ function bindRows() {
     } else if (act === 'col') {
       toggleColHere(row.id, btn.dataset.f);
     } else if (act === 'find') {
-      openZoomFind(row.id, btn.dataset.f);
+      const fta = holder.querySelector('textarea');
+      if (fta && !zoomCtx) {
+        fta.focus();
+        bindDocTo(fta);
+        window.JJDoc.openFind(false);
+      } else {
+        openZoomFind(row.id, btn.dataset.f);
+      }
     } else if (act === 'zoom') {
       openZoom(row.id, btn.dataset.f, row.label);
     } else if (act === 'refind') {
@@ -3177,6 +3202,18 @@ function bindChrome() {
   });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && popupOpen) { closePopup(); return; }
+
+    // F3 : 다음 찾기 / Shift+F3 : 이전 찾기
+    // 찾을 말이 없으면 지금 고른 낱말로 찾는다 (더블클릭 -> F3)
+    if (e.key === 'F3') {
+      const fta = e.target.closest && e.target.closest('textarea.memo, textarea.code');
+      // 글 칸 안이면 doc.js 가 이미 처리했다 (두 번 처리하면 한 칸 더 건너뛴다)
+      if (fta && fta.dataset.jjbound === '1') return;
+      e.preventDefault();
+      if (fta && !zoomCtx) bindDocTo(fta);
+      if (window.JJDoc.findNext) window.JJDoc.findNext(e.shiftKey ? -1 : 1);
+      return;
+    }
     const ctrl = e.ctrlKey || e.metaKey;
 
     // Alt+C : 글·명령 칸에서 눌러도 그 자리에서 열 편집이 켜진다.
@@ -3228,6 +3265,13 @@ function bindChrome() {
     }
     else if (k === 'f') {
       e.preventDefault();
+      // 글 칸 안에서 눌렀으면 그 자리에서 찾는다 (편집기를 열지 않는다)
+      const inTa = e.target.closest && e.target.closest('textarea.memo, textarea.code');
+      if (inTa && !zoomCtx) {
+        bindDocTo(inTa);
+        window.JJDoc.openFind(false);
+        return;
+      }
       const ta = e.target.closest && e.target.closest('textarea.memo, textarea.code');
       if (ta) {
         const holder = ta.closest('[data-id]');

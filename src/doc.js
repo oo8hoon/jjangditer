@@ -27,7 +27,8 @@
   const undoStack = [];
   const redoStack = [];
 
-  const find = { q: '', cs: false, matches: [], idx: -1, open: false, repl: false };
+  const find = { q: '', cs: false, matches: [], idx: -1, open: false, repl: false,
+                 hl: false };   // hl = 찾은 곳을 칠해 둘지 (찾기 줄을 안 열어도 칠한다)
 
   /** 지금 붙어 있는 곳 안에서 찾는다 (없으면 null) */
   function q(sel) { return root ? root.querySelector(sel) : null; }
@@ -278,6 +279,7 @@
         if (find.matches.length > 20000) break;
       }
       if (find.matches.length) {
+        find.hl = true;
         const caret = ta.selectionStart;
         let k = find.matches.findIndex((m) => m.start >= caret);
         find.idx = k < 0 ? 0 : k;
@@ -316,7 +318,7 @@
   function drawHighlights() {
     if (!hilBox) return;
     hilBox.innerHTML = '';
-    if (!find.open || !find.matches.length) return;
+    if (!find.hl || !find.matches.length) return;
     const m = metrics();
     const text = ta.value;
     const n = Math.min(find.matches.length, HILITE_MAX);
@@ -364,8 +366,45 @@
     return true;
   }
 
+  /**
+   * F3 처리.
+   *   dir = 1 다음 / -1 이전
+   * 고른 글자가 있으면 그걸로 새로 찾고, 없으면 이어서 다음으로 간다.
+   * 찾기 줄을 열지 않아도 동작한다 (칠하기는 그대로 보인다).
+   */
+  function findNext(dir) {
+    if (!ta) return false;
+
+    const sel = ta.value.slice(ta.selectionStart, ta.selectionEnd);
+    const isNewPick = sel && sel.indexOf('\n') < 0 &&
+                      (find.cs ? sel !== find.q : sel.toLowerCase() !== (find.q || '').toLowerCase());
+
+    if (isNewPick) {
+      // 더블클릭 등으로 새 낱말을 골랐다 -> 그 말로 찾기 시작
+      find.q = sel;
+      const qi = q('.fq');
+      if (qi) qi.value = sel;
+      runFind(false);
+      if (find.matches.length) {
+        // 고른 자리의 '다음' 것으로 간다 (더블클릭 -> F3 -> 다음 -> 다음)
+        const here = find.matches.findIndex((m) => m.start === ta.selectionStart);
+        if (here >= 0) gotoMatch(here + (dir < 0 ? -1 : 1));
+        else gotoMatch(find.idx);
+      }
+      return find.matches.length > 0;
+    }
+
+    if (!find.q) return false;
+    if (!find.matches.length) runFind(false);
+    if (!find.matches.length) { updateFindBar(); return false; }
+
+    gotoMatch(find.idx + (dir < 0 ? -1 : 1));
+    return true;
+  }
+
   function closeFind() {
     find.open = false;
+    find.hl = false;
     const w = q('.findwrap');
     if (w) w.classList.add('hidden');
     if (hilBox) hilBox.innerHTML = '';
@@ -588,7 +627,12 @@
 
       if (ctrl && e.code === 'KeyF') { if (openFind(false)) { e.preventDefault(); } return; }
       if (ctrl && e.code === 'KeyH') { if (openFind(true)) { e.preventDefault(); } return; }
-      if (e.key === 'F3') { e.preventDefault(); if (find.matches.length) gotoMatch(find.idx + (e.shiftKey ? -1 : 1)); return; }
+      if (e.key === 'F3') {
+        e.preventDefault();
+        e.stopPropagation();        // 바깥에서 또 처리하지 않도록
+        findNext(e.shiftKey ? -1 : 1);
+        return;
+      }
       if (e.key === 'Escape' && find.open && !rect) { e.preventDefault(); closeFind(); return; }
 
       // 되돌릴 기록이 없으면 가로채지 않는다 (브라우저 기본 되돌리기에 맡김)
@@ -757,6 +801,8 @@
       redoStack.length = 0;
       setColMode(false, true);
       clearRect();
+      find.q = '';
+      find.matches = [];
       closeFind();
       updateStatus();
     },
@@ -787,7 +833,11 @@
       }
     },
     text: function () { return ta ? ta.value : ''; },
-    openFind: function (withReplace) { if (ta) openFind(withReplace); },
+    openFind: function (withReplace) { if (ta) return openFind(withReplace); return false; },
+    /** F3 : 다음(1) / 이전(-1) 찾기. 고른 낱말이 있으면 그 말로 새로 찾는다 */
+    findNext: function (dir) { return findNext(dir); },
+    /** 찾기 줄이 열려 있는지 */
+    findOpen: function () { return !!find.open; },
     toggleColMode: function () { if (ta) setColMode(!colMode); },
     /** 열 편집 모드를 켜거나 끈다 (밖에서 바로 지정) */
     setColMode: function (on) { if (ta) setColMode(!!on); },
