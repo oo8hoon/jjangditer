@@ -959,3 +959,37 @@ body.is-doc #toolbar { display: none; }
 
 
 
+
+
+/* ================= 저장 아이콘 : 바뀐 게 있으면 칼라 ================= */
+#iconbar button[data-ic="save"] {
+  position: relative;
+  /* 전환 효과를 쓰면 창이 가려져 있을 때 값이 늦게 반영된다 — 바로 바뀌게 둔다 */
+  filter: grayscale(1) brightness(1.15);
+  opacity: .45;
+}
+#iconbar button[data-ic="save"].dirty {
+  filter: none;
+  opacity: 1;
+}
+/* 바뀐 게 있으면 작은 점으로 한 번 더 알려 준다 */
+#iconbar button[data-ic="save"].dirty::after {
+  content: '';
+  position: absolute;
+  right: 3px;
+  top: 2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warn);
+  box-shadow: 0 0 0 1.5px var(--bg2);
+}
+
+/* 저장 안 된 탭에도 점 */
+#tabs .tab.dirty .tname::after {
+  content: '●';
+  margin-left: 4px;
+  font-size: 9px;
+  color: var(--warn);
+  vertical-align: 1px;
+}

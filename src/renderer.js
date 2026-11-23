@@ -518,6 +518,21 @@ function render() {
   renderProgress();
 }
 
+/**
+ * 저장 아이콘 색 바꾸기.
+ * 파일로 열어둔 글이 바뀌었으면 칼라, 아니면 흑백.
+ */
+function updateSaveIcon() {
+  const b = document.querySelector('#iconbar button[data-ic="save"]');
+  if (!b) return;
+  const tab = activeTab();
+  const dirty = tab ? unsavedFileRows(tab).length > 0 : false;
+  b.classList.toggle('dirty', dirty);
+  b.title = dirty
+    ? '파일 저장 — 바뀐 내용이 있습니다 (Ctrl+S)'
+    : '파일 저장 (Ctrl+S)';
+}
+
 function renderTabs() {
   const host = $('#tabs');
   host.innerHTML = '';
@@ -525,10 +540,11 @@ function renderTabs() {
     const c = countOf(t.rows);
     const el = document.createElement('div');
     el.className = 'tab' + (t.id === ws.activeTabId ? ' active' : '') +
-      (c.total > 0 && c.done === c.total ? ' alldone' : '');
+      (c.total > 0 && c.done === c.total ? ' alldone' : '') +
+      (unsavedFileRows(t).length ? ' dirty' : '');
     el.dataset.id = t.id;
     el.draggable = true;
-    el.title = t.name;
+    el.title = t.name + (unsavedFileRows(t).length ? '  (저장 안 된 내용 있음)' : '');
     el.innerHTML = '<span class="tname">' + esc(t.name) + '</span>' +
       '<span class="tcount">' + c.done + '/' + c.total + '</span>' +
       '<button class="tclose" title="이 탭 닫기 (내용도 함께 지워집니다)">✕</button>';
@@ -751,6 +767,7 @@ function renderRows() {
       box.appendChild(el);
     }
   }
+  updateSaveIcon();
   applyFit();
   requestAnimationFrame(() => {
     $$('#rows textarea').forEach(autosize);
@@ -2491,6 +2508,7 @@ async function saveTabFile(id, asNew) {
   pushRecent('file', base, row.filePath);
   render();
   scheduleSave();
+  updateSaveIcon();
   toast('저장했습니다 (' + row.encoding + '): ' + row.filePath);
 }
 
@@ -2538,6 +2556,7 @@ async function saveCurrentFile(asNew) {
   // 이름이 바뀐 게 아니면 다시 그릴 이유가 없다 (그리면 커서가 풀린다)
   if (renamed) render();
   scheduleSave();
+  updateSaveIcon();
   restoreCaret(caret);
   toast('저장했습니다 (' + (row.encoding) + '): ' + row.filePath);
 }
@@ -2583,6 +2602,7 @@ async function saveZoomToFile(asNew) {
   $('#zoom .ztitle').textContent = (row.label || '글') + '  —  ' + row.filePath;
   pushRecent('file', row.label || '글', row.filePath);
   updateZoomHead(row);
+  updateSaveIcon();
   backZ();
   toast('저장했습니다 (' + enc + '): ' + row.filePath);
 }
@@ -3042,6 +3062,7 @@ function bindRows() {
     const row = rowById(holder.dataset.id);
     if (!row) return;
     row[f] = e.target.value;
+    updateSaveIcon();                 // 바뀌면 저장 아이콘을 칼라로
     if (e.target.tagName === 'TEXTAREA') autosize(e.target);
     if (f === 'cmd' || f === 'text') {
       const box = holder.querySelector('.resolved');
