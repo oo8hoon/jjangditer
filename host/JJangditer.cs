@@ -480,6 +480,255 @@ namespace JJ
         }
     }
 
+
+    /* =========================== 찾기 / 바꾸기 창 ===========================
+     * 앱 창 밖으로도 끌어낼 수 있도록 진짜 윈도우 창으로 만든다.
+     * 모달이 아니라서 열려 있어도 뒤의 글을 그대로 고칠 수 있다.
+     */
+    class FindForm : Form
+    {
+        public Action<string> OnAction;          // next / prev / count / rep / repall / change
+        public Func<string> AskSelection;        // 글에서 고른 낱말 가져오기
+
+        readonly TextBox tbFind = new TextBox();
+        readonly TextBox tbRepl = new TextBox();
+        readonly CheckBox cbHl = new CheckBox();
+        readonly CheckBox cbCase = new CheckBox();
+        readonly CheckBox cbWord = new CheckBox();
+        readonly CheckBox cbRe = new CheckBox();
+        readonly RadioButton rbUp = new RadioButton();
+        readonly RadioButton rbDown = new RadioButton();
+        readonly RadioButton rbRow = new RadioButton();
+        readonly RadioButton rbTab = new RadioButton();
+        readonly Button btTabFind = new Button();
+        readonly Button btTabRepl = new Button();
+        readonly Button btNext = new Button();
+        readonly Button btCount = new Button();
+        readonly Button btRep = new Button();
+        readonly Button btRepAll = new Button();
+        readonly Button btClose = new Button();
+        readonly Label lbReplCap = new Label();
+        readonly Label lbStat = new Label();
+
+        bool replMode;
+        bool quiet;                              // 코드로 값을 바꿀 때 이벤트를 막는다
+
+        static readonly Color BG = ColorTranslator.FromHtml("#1b1e26");
+        static readonly Color BG2 = ColorTranslator.FromHtml("#22262f");
+        static readonly Color FG = ColorTranslator.FromHtml("#dfe3ea");
+        static readonly Color DIM = ColorTranslator.FromHtml("#8c94a3");
+        static readonly Color ACC = ColorTranslator.FromHtml("#4da3ff");
+        static readonly Color LINE = ColorTranslator.FromHtml("#2e333e");
+
+        public string Query { get { return tbFind.Text; } set { quiet = true; tbFind.Text = value; quiet = false; } }
+        public string Replacement { get { return tbRepl.Text; } }
+        public bool Hilite { get { return cbHl.Checked; } }
+        public bool MatchCase { get { return cbCase.Checked; } }
+        public bool WholeWord { get { return cbWord.Checked; } }
+        public bool UseRegex { get { return cbRe.Checked; } }
+        public bool DirUp { get { return rbUp.Checked; } }
+        public bool ScopeTab { get { return rbTab.Checked; } }
+
+        public FindForm()
+        {
+            Text = "찾기";
+            FormBorderStyle = FormBorderStyle.FixedToolWindow;
+            StartPosition = FormStartPosition.Manual;
+            ShowInTaskbar = false;
+            MaximizeBox = false;
+            MinimizeBox = false;
+            ClientSize = new Size(452, 232);
+            BackColor = BG;
+            ForeColor = FG;
+            Font = new Font("맑은 고딕", 9f);
+            KeyPreview = true;
+
+            // ---- 위쪽 탭 ----
+            SetupTab(btTabFind, "찾기", 10);
+            SetupTab(btTabRepl, "바꾸기", 86);
+            btTabFind.Click += (s, e) => SetMode(false);
+            btTabRepl.Click += (s, e) => SetMode(true);
+            Controls.Add(btTabFind);
+            Controls.Add(btTabRepl);
+
+            // ---- 입력칸 ----
+            var lbFind = Cap("찾을 내용", 12, 48);
+            Controls.Add(lbFind);
+            SetupBox(tbFind, 86, 45, 352);
+            Controls.Add(tbFind);
+
+            lbReplCap.Text = "바꿀 내용";
+            lbReplCap.ForeColor = DIM;
+            lbReplCap.AutoSize = true;
+            lbReplCap.Location = new Point(12, 76);
+            Controls.Add(lbReplCap);
+            SetupBox(tbRepl, 86, 73, 352);
+            Controls.Add(tbRepl);
+
+            // ---- 선택 항목 ----
+            SetupCheck(cbHl, "찾은 모든 항목 강조", 12, 106, true);
+            SetupCheck(cbCase, "대/소문자 일치", 12, 128, false);
+            SetupCheck(cbWord, "모든 단어 일치", 12, 150, false);
+            SetupCheck(cbRe, "정규식", 12, 172, false);
+            Controls.Add(cbHl); Controls.Add(cbCase); Controls.Add(cbWord); Controls.Add(cbRe);
+
+            var gbDir = Group("방향", 196, 102, 76, 60);
+            SetupRadio(rbUp, "위", 8, 18, false);
+            SetupRadio(rbDown, "아래", 8, 38, true);
+            gbDir.Controls.Add(rbUp); gbDir.Controls.Add(rbDown);
+            Controls.Add(gbDir);
+
+            var gbScope = Group("범위", 280, 102, 76, 60);
+            SetupRadio(rbRow, "이 글", 8, 18, true);
+            SetupRadio(rbTab, "이 탭", 8, 38, false);
+            gbScope.Controls.Add(rbRow); gbScope.Controls.Add(rbTab);
+            Controls.Add(gbScope);
+
+            // ---- 단추 ----
+            SetupBtn(btNext, "다음 찾기", 364, 104, true);
+            SetupBtn(btCount, "모두 세기", 364, 132, false);
+            SetupBtn(btRep, "바꾸기", 364, 160, false);
+            SetupBtn(btRepAll, "모두 바꾸기", 364, 188, false);
+            SetupBtn(btClose, "닫기", 196, 190, false);
+            btClose.Width = 76;
+            Controls.Add(btNext); Controls.Add(btCount);
+            Controls.Add(btRep); Controls.Add(btRepAll); Controls.Add(btClose);
+
+            lbStat.ForeColor = DIM;
+            lbStat.AutoSize = false;
+            lbStat.Location = new Point(12, 210);
+            lbStat.Size = new Size(340, 16);
+            Controls.Add(lbStat);
+
+            // ---- 동작 ----
+            btNext.Click += (s, e) => Fire("next");
+            btCount.Click += (s, e) => Fire("count");
+            btRep.Click += (s, e) => Fire("rep");
+            btRepAll.Click += (s, e) => Fire("repall");
+            btClose.Click += (s, e) => Hide();
+
+            tbFind.TextChanged += (s, e) => { if (!quiet) Fire("change"); };
+            EventHandler opt = (s, e) => { if (!quiet) Fire("change"); };
+            cbHl.CheckedChanged += opt; cbCase.CheckedChanged += opt;
+            cbWord.CheckedChanged += opt; cbRe.CheckedChanged += opt;
+            rbRow.CheckedChanged += opt; rbTab.CheckedChanged += opt;
+
+            tbFind.KeyDown += (s, e) =>
+            {
+                if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; Fire(e.Shift ? "prev" : "next"); }
+            };
+            tbRepl.KeyDown += (s, e) =>
+            {
+                if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; Fire("rep"); }
+            };
+            KeyDown += (s, e) =>
+            {
+                if (e.KeyCode == Keys.Escape) { e.SuppressKeyPress = true; Hide(); }
+                else if (e.KeyCode == Keys.F3) { e.SuppressKeyPress = true; Fire(e.Shift ? "prev" : "next"); }
+            };
+
+            FormClosing += (s, e) =>
+            {
+                if (e.CloseReason == CloseReason.UserClosing) { e.Cancel = true; Hide(); }
+            };
+
+            SetMode(false);
+        }
+
+        void Fire(string what) { if (OnAction != null) OnAction(what); }
+
+        Label Cap(string t, int x, int y)
+        {
+            return new Label { Text = t, ForeColor = DIM, AutoSize = true, Location = new Point(x, y) };
+        }
+
+        GroupBox Group(string t, int x, int y, int w, int h)
+        {
+            return new GroupBox
+            {
+                Text = t, ForeColor = DIM, Location = new Point(x, y),
+                Size = new Size(w, h), FlatStyle = FlatStyle.Flat
+            };
+        }
+
+        void SetupTab(Button b, string t, int x)
+        {
+            b.Text = t;
+            b.Location = new Point(x, 8);
+            b.Size = new Size(72, 26);
+            b.FlatStyle = FlatStyle.Flat;
+            b.FlatAppearance.BorderSize = 1;
+            b.TabStop = false;
+        }
+
+        void SetupBox(TextBox b, int x, int y, int w)
+        {
+            b.Location = new Point(x, y);
+            b.Width = w;
+            b.BackColor = BG2;
+            b.ForeColor = FG;
+            b.BorderStyle = BorderStyle.FixedSingle;
+            b.Font = new Font("Consolas", 9.5f);
+        }
+
+        void SetupCheck(CheckBox c, string t, int x, int y, bool on)
+        {
+            c.Text = t; c.Location = new Point(x, y); c.AutoSize = true;
+            c.ForeColor = FG; c.Checked = on; c.FlatStyle = FlatStyle.Flat;
+        }
+
+        void SetupRadio(RadioButton r, string t, int x, int y, bool on)
+        {
+            r.Text = t; r.Location = new Point(x, y); r.AutoSize = true;
+            r.ForeColor = FG; r.Checked = on; r.FlatStyle = FlatStyle.Flat;
+        }
+
+        void SetupBtn(Button b, string t, int x, int y, bool prim)
+        {
+            b.Text = t; b.Location = new Point(x, y); b.Size = new Size(76, 24);
+            b.FlatStyle = FlatStyle.Flat;
+            b.FlatAppearance.BorderColor = prim ? ACC : LINE;
+            b.BackColor = prim ? ACC : BG2;
+            b.ForeColor = prim ? Color.White : FG;
+            b.TabStop = false;
+        }
+
+        public void SetMode(bool repl)
+        {
+            replMode = repl;
+            Text = repl ? "바꾸기" : "찾기";
+            lbReplCap.Visible = repl;
+            tbRepl.Visible = repl;
+            btRep.Visible = repl;
+            btRepAll.Visible = repl;
+
+            btTabFind.BackColor = repl ? BG : BG2;
+            btTabFind.ForeColor = repl ? DIM : ACC;
+            btTabFind.FlatAppearance.BorderColor = repl ? LINE : ACC;
+            btTabRepl.BackColor = repl ? BG2 : BG;
+            btTabRepl.ForeColor = repl ? ACC : DIM;
+            btTabRepl.FlatAppearance.BorderColor = repl ? ACC : LINE;
+
+            if (repl) tbRepl.Focus(); else tbFind.Focus();
+        }
+
+        public bool ReplMode { get { return replMode; } }
+
+        public void SetStatus(string text, bool bad)
+        {
+            lbStat.Text = text ?? "";
+            lbStat.ForeColor = bad ? ColorTranslator.FromHtml("#ff6b6b") : DIM;
+        }
+
+        public void FocusQuery()
+        {
+            if (replMode) { tbRepl.Focus(); tbRepl.SelectAll(); }
+            else { tbFind.Focus(); tbFind.SelectAll(); }
+        }
+
+        protected override bool ShowWithoutActivation { get { return false; } }
+    }
+
     /* =========================== 트리거 띠 =========================== */
 
     /// 숨김 상태에서 화면 우측 끝에 남는 9px 띠. 마우스를 올리면 패널이 나온다.

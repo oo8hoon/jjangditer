@@ -13,6 +13,7 @@
   const stateCbs = [];
   const updateCbs = [];
   const fifCbs = [];
+  const fdCbs = [];
   let seq = 0;
 
   wv.addEventListener('message', function (e) {
@@ -22,6 +23,7 @@
     if (m.ev === 'state') { stateCbs.forEach(function (cb) { cb(m.d); }); return; }
     if (m.ev === 'update') { updateCbs.forEach(function (cb) { cb(m.k, m.d); }); return; }
     if (m.ev === 'fif') { fifCbs.forEach(function (cb) { cb(m.k, m.d); }); return; }
+    if (m.ev === 'fd') { fdCbs.forEach(function (cb) { cb(m.k, m.d); }); return; }
 
     const p = pending.get(m.id);
     if (!p) return;
@@ -62,6 +64,12 @@
     setPrefs: (p) => call('setPrefs', p),
     copy: (t) => call('copy', t == null ? '' : String(t)),
     paste: () => call('paste'),
+    findShow: (mode, preset) => call('findShow', mode || 'find', preset || null),
+    findHide: () => call('findHide'),
+    findStatus: (t, bad) => call('findStatus', t || '', !!bad),
+    findOpts: () => call('findOpts'),
+    findVisible: () => call('findVisible'),
+    onFindDlg: (cb) => { fdCbs.push(cb); },
     myTemplates: () => call('myTemplates'),
     readTemplate: (p) => call('readTemplate', p),
     saveTemplate: (n, j) => call('saveTemplate', n, j),

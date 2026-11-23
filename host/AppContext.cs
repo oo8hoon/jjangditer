@@ -257,6 +257,18 @@ namespace JJ
                     try { return Clipboard.ContainsText() ? Clipboard.GetText() : ""; }
                     catch { return ""; }
 
+                case "findShow": return ShowFindForm(S(a, 0), S(a, 1));
+                case "findHide":
+                    if (findForm != null && !findForm.IsDisposed) findForm.Hide();
+                    return true;
+                case "findStatus":
+                    if (findForm != null && !findForm.IsDisposed)
+                        findForm.SetStatus(S(a, 0), B(a, 1, false));
+                    return true;
+                case "findOpts": return FindOpts();
+                case "findVisible":
+                    return findForm != null && !findForm.IsDisposed && findForm.Visible;
+
                 case "myTemplates": return MyTemplates();
                 case "readTemplate": return ReadTemplate(S(a, 0));
                 case "saveTemplate": return SaveTemplate(S(a, 0), S(a, 1));
@@ -605,6 +617,7 @@ namespace JJ
                 if (prefs.Pinned || prefs.Maximized || collapsed
                     || panel == null || panel.IsDisposed || !panel.Visible
                     || dragTimer != null || anim != null
+                    || (findForm != null && !findForm.IsDisposed && findForm.Visible)
                     || Native.ForegroundIsOurs())        // 짱디터를 쓰는 중 (대화상자 포함)
                 {
                     awaySince = DateTime.MinValue;
@@ -632,6 +645,8 @@ namespace JJ
         void CollapseIfMouseAway(string why)
         {
             if (dragTimer != null || prefs.Maximized) return;
+            // 찾기 창을 쓰는 중이면 패널이 사라지면 안 된다
+            if (findForm != null && !findForm.IsDisposed && findForm.Visible) return;
             if (panel.Visible && panel.Bounds.Contains(Cursor.Position)) return;
             Collapse(true);
         }
@@ -723,6 +738,59 @@ namespace JJ
             if (collapsed || !panel.Visible) { Expand(true); panel.Activate(); }
             else if (!prefs.Pinned) Collapse(true);
             else panel.Activate();
+        }
+
+        /* ---------------- 찾기 창 ---------------- */
+
+        FindForm findForm;
+
+        FindForm EnsureFindForm()
+        {
+            if (findForm != null && !findForm.IsDisposed) return findForm;
+            findForm = new FindForm();
+            findForm.Owner = panel;              // 패널 위에 머물되, 창 밖으로도 끌어낼 수 있다
+            findForm.OnAction = (what) =>
+            {
+                Post(new Dictionary<string, object> {
+                    { "ev", "fd" }, { "k", what },
+                    { "d", FindOpts() }
+                });
+            };
+            return findForm;
+        }
+
+        Dictionary<string, object> FindOpts()
+        {
+            var f = findForm;
+            if (f == null || f.IsDisposed) return new Dictionary<string, object>();
+            return new Dictionary<string, object> {
+                { "q", f.Query }, { "r", f.Replacement },
+                { "cs", f.MatchCase }, { "word", f.WholeWord }, { "re", f.UseRegex },
+                { "hl", f.Hilite }, { "up", f.DirUp }, { "tab", f.ScopeTab },
+                { "repl", f.ReplMode }
+            };
+        }
+
+        /// 찾기 창을 띄운다. 패널 오른쪽 바깥쪽에 놓아 글을 가리지 않게 한다.
+        object ShowFindForm(string mode, string preset)
+        {
+            var f = EnsureFindForm();
+            f.SetMode(mode == "repl");
+            if (!string.IsNullOrEmpty(preset)) f.Query = preset;
+
+            if (!f.Visible)
+            {
+                var wa = TargetScreen().WorkingArea;
+                int x = panel.Left - f.Width - 12;
+                if (x < wa.Left + 8) x = wa.Left + 8;        // 왼쪽으로 넘치면 화면 안으로
+                int y = panel.Top + 140;
+                if (y + f.Height > wa.Bottom) y = Math.Max(wa.Top + 8, wa.Bottom - f.Height - 8);
+                f.Location = new Point(x, y);
+                f.Show(panel);
+            }
+            f.Activate();
+            f.FocusQuery();
+            return FindOpts();
         }
 
         /* ---------------- 내 템플릿 ---------------- */
