@@ -264,6 +264,7 @@ namespace JJ
         public string Theme = "dark";
         public int HideDelay = 500;
         public string DisplayId = null;
+        public string DisplayRect = null;   // "x,y,w,h" — 번호가 바뀌어도 찾아내려고
         public string LastDir = null;
         public string UpdateUrl = "";
         public bool AutoUpdate = true;
@@ -285,6 +286,7 @@ namespace JJ
                 p.Theme = GetStr(d, "theme", p.Theme);
                 p.HideDelay = GetInt(d, "hideDelay", p.HideDelay);
                 p.DisplayId = GetStr(d, "displayId", null);
+                p.DisplayRect = GetStr(d, "displayRect", null);
                 p.LastDir = GetStr(d, "lastDir", null);
                 p.UpdateUrl = GetStr(d, "updateUrl", "");
                 p.AutoUpdate = GetBool(d, "autoUpdate", p.AutoUpdate);
@@ -303,7 +305,7 @@ namespace JJ
             var d = new Dictionary<string, object>
             {
                 { "width", Width }, { "pinned", Pinned }, { "theme", Theme },
-                { "hideDelay", HideDelay }, { "displayId", DisplayId }, { "lastDir", LastDir },
+                { "hideDelay", HideDelay }, { "displayId", DisplayId }, { "displayRect", DisplayRect }, { "lastDir", LastDir },
                 { "updateUrl", UpdateUrl }, { "autoUpdate", AutoUpdate }, { "lowResource", LowResource },
                 { "maximized", Maximized }, { "restoreWidth", RestoreWidth },
                 { "triggerZone", TriggerZone }
@@ -432,6 +434,7 @@ namespace JJ
         public const int VK_LBUTTON = 0x01;
 
         public static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
+        public static readonly IntPtr HWND_NOTOPMOST = new IntPtr(-2);
         public const uint SWP_NOMOVE = 0x0002, SWP_NOSIZE = 0x0001, SWP_NOACTIVATE = 0x0010;
         public const uint MOD_ALT = 0x1, MOD_SHIFT = 0x4;
         public const int WM_HOTKEY = 0x0312;
@@ -453,6 +456,27 @@ namespace JJ
         public static void Topmost(Form f)
         {
             SetWindowPos(f.Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        }
+
+        /// 맨 앞 고정을 푼다 (다른 창이 위로 올라올 수 있게)
+        public static void NotTopmost(Form f)
+        {
+            SetWindowPos(f.Handle, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        }
+
+        /// 맨 앞 고정 없이, 다른 창들 위로 한 번 올린다 (포커스는 뺏지 않음)
+        public static void BringToFront(Form f)
+        {
+            if (f == null || f.IsDisposed) return;
+            SetWindowPos(f.Handle, IntPtr.Zero /*HWND_TOP*/, 0, 0, 0, 0,
+                         SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        }
+
+        /// 맨 앞에 둘지 말지 한 번에
+        public static void SetTopmost(Form f, bool on)
+        {
+            if (f == null || f.IsDisposed) return;
+            if (on) Topmost(f); else NotTopmost(f);
         }
     }
 
@@ -521,7 +545,7 @@ namespace JJ
             Text = "짱디터";
             FormBorderStyle = FormBorderStyle.None;
             ShowInTaskbar = true;
-            TopMost = true;
+            TopMost = false;      // 고정 여부에 따라 AppContext 에서 정한다
             StartPosition = FormStartPosition.Manual;
             MinimumSize = new Size(1, 1);
             BackColor = ColorTranslator.FromHtml("#14161c");

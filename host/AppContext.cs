@@ -67,16 +67,21 @@ namespace JJ
             panel.ResizeEnd += (s, e) =>
             {
                 if (collapsed || !panel.Visible) return;
-                var sc = Screen.FromRectangle(panel.Bounds);
-                if (sc.DeviceName != prefs.DisplayId) { prefs.DisplayId = sc.DeviceName; prefs.Save(); }
+                RememberScreen(Screen.FromRectangle(panel.Bounds));
                 var want = PanelBounds(prefs.Width);
                 if (panel.Bounds != want) panel.Bounds = want;
                 SendState();
             };
 
+            // 쓰는 모니터를 이름+영역으로 기록해 둔다.
+            // (윈도우가 모니터 번호를 다시 매겨도 같은 자리를 찾아가도록)
+            RememberScreen(TargetScreen());
+
             panel.Bounds = PanelBounds(CurWidth());
             panel.Show();
-            Native.Topmost(panel);
+            ApplyTopmost();
+            // 고정 상태면 맨 앞에 두지는 않되, 시작할 때 한 번은 보이게 올려 준다
+            if (prefs.Pinned) Native.BringToFront(panel);
             StartAwayWatch();
             Native.RegisterHotKey(panel.Handle, HOTKEY_ID, Native.MOD_ALT | Native.MOD_SHIFT, (uint)Keys.J);
 
@@ -211,6 +216,7 @@ namespace JJ
 
                 case "setPinned":
                     prefs.Pinned = B(a, 0, true); prefs.Save();
+                    ApplyTopmost();
                     if (prefs.Pinned) { Expand(true); panel.Activate(); } else Collapse(true);
                     SendState(); return prefs.Pinned;
 
@@ -413,14 +419,47 @@ namespace JJ
 
         /* ---------------- 창 위치 / 접기 펼치기 ---------------- */
 
+        static string RectKey(Screen s)
+        {
+            var w = s.WorkingArea;
+            return w.X + "," + w.Y + "," + w.Width + "," + w.Height;
+        }
+
+        /// 패널을 붙일 모니터.
+        /// 1) 기억해 둔 이름  2) 이름이 안 맞으면 기억해 둔 화면 영역  3) 주 모니터
         Screen TargetScreen()
         {
             if (!string.IsNullOrEmpty(prefs.DisplayId))
             {
-                var s = Screen.AllScreens.FirstOrDefault(x => x.DeviceName == prefs.DisplayId);
-                if (s != null) return s;
+                var byName = Screen.AllScreens.FirstOrDefault(x => x.DeviceName == prefs.DisplayId);
+                if (byName != null && (string.IsNullOrEmpty(prefs.DisplayRect)
+                                       || RectKey(byName) == prefs.DisplayRect))
+                    return byName;
+            }
+            if (!string.IsNullOrEmpty(prefs.DisplayRect))
+            {
+                // 번호가 바뀌었어도 같은 자리/크기의 모니터를 찾는다
+                var byRect = Screen.AllScreens.FirstOrDefault(x => RectKey(x) == prefs.DisplayRect);
+                if (byRect != null)
+                {
+                    prefs.DisplayId = byRect.DeviceName;
+                    prefs.Save();
+                    return byRect;
+                }
             }
             return Screen.PrimaryScreen;
+        }
+
+        /// 지금 쓰는 모니터를 이름과 영역 둘 다로 기억해 둔다
+        void RememberScreen(Screen s)
+        {
+            if (s == null) return;
+            if (prefs.DisplayId != s.DeviceName || prefs.DisplayRect != RectKey(s))
+            {
+                prefs.DisplayId = s.DeviceName;
+                prefs.DisplayRect = RectKey(s);
+                prefs.Save();
+            }
         }
 
         Rectangle PanelBounds(int w)
@@ -428,6 +467,13 @@ namespace JJ
             var wa = TargetScreen().WorkingArea;
             w = Math.Max(1, Math.Min(wa.Width, w));
             return new Rectangle(wa.Right - w, wa.Top, w, wa.Height);
+        }
+
+        /// 자동 숨김일 때만 맨 앞에 둔다.
+        /// 고정(📌) 했으면 보통 창처럼 다른 프로그램이 위로 올라올 수 있다.
+        void ApplyTopmost()
+        {
+            Native.SetTopmost(panel, !prefs.Pinned);
         }
 
         /// 지금 펼쳐야 할 폭 (최대화 중이면 화면 전체)
@@ -496,7 +542,7 @@ namespace JJ
             {
                 panel.Bounds = PanelBounds(animate ? SEED_W : CurWidth());
                 panel.Show();
-                Native.Topmost(panel);
+                ApplyTopmost();
             }
             if (animate) AnimateWidth(CurWidth(), 170, null);
             else panel.Bounds = PanelBounds(CurWidth());
@@ -535,8 +581,7 @@ namespace JJ
         /// 끌어다 놓은 모니터의 우측에 다시 도킹한다
         void EndDragLoop()
         {
-            var sc = Screen.FromRectangle(panel.Bounds);
-            if (sc.DeviceName != prefs.DisplayId) { prefs.DisplayId = sc.DeviceName; prefs.Save(); }
+            RememberScreen(Screen.FromRectangle(panel.Bounds));
             panel.Bounds = PanelBounds(CurWidth());
             if (trigger != null && !trigger.IsDisposed) trigger.Bounds = TriggerBounds();
             SendState();
@@ -658,7 +703,7 @@ namespace JJ
             if (all.Length < 2) return new Dictionary<string, object> { { "count", 1 }, { "name", "모니터 1" } };
             int cur = Array.FindIndex(all, x => x.DeviceName == TargetScreen().DeviceName);
             int idx = (cur + 1) % all.Length;
-            prefs.DisplayId = all[idx].DeviceName;
+            RememberScreen(all[idx]);
             prefs.Save();
             collapsed = false;
             HideTrigger();
