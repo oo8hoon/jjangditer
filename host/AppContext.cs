@@ -257,6 +257,17 @@ namespace JJ
                     try { return Clipboard.ContainsText() ? Clipboard.GetText() : ""; }
                     catch { return ""; }
 
+                case "openUrl":
+                    {
+                        var u = S(a, 0) ?? "";
+                        if (u.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                            u.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                        {
+                            try { System.Diagnostics.Process.Start(u); } catch { }
+                        }
+                        return true;
+                    }
+
                 case "findShow": return ShowFindForm(S(a, 0), S(a, 1));
                 case "findHide":
                     if (findForm != null && !findForm.IsDisposed) findForm.Hide();

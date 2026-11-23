@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('jj', {
   setPrefs: (p) => ipcRenderer.invoke('prefs:set', p),
   copy: (t) => ipcRenderer.invoke('clip:write', t),
   paste: () => Promise.resolve(''),
+  openUrl: () => Promise.resolve(true),
   findShow: () => Promise.resolve({}),
   findHide: () => Promise.resolve(true),
   findStatus: () => Promise.resolve(true),

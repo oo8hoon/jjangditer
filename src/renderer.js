@@ -1589,6 +1589,126 @@ function duplicateForNew() {
   toast('복제했습니다');
 }
 
+
+/* ================= 정보 (About) ================= */
+const REPO_URL = 'https://github.com/oo8hoon/jjangditer';
+
+const MIT_TEXT = [
+  'MIT License',
+  '',
+  'Copyright (c) 2026 JJangs',
+  '',
+  'Permission is hereby granted, free of charge, to any person obtaining a copy',
+  'of this software and associated documentation files (the "Software"), to deal',
+  'in the Software without restriction, including without limitation the rights',
+  'to use, copy, modify, merge, publish, distribute, sublicense, and/or sell',
+  'copies of the Software, and to permit persons to whom the Software is',
+  'furnished to do so, subject to the following conditions:',
+  '',
+  'The above copyright notice and this permission notice shall be included in all',
+  'copies or substantial portions of the Software.',
+  '',
+  'THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR',
+  'IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,',
+  'FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE',
+  'AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER',
+  'LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,',
+  'OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE',
+  'SOFTWARE.'
+].join('\n');
+
+/** 보안 점검 등에 그대로 붙여 낼 수 있는 요약 */
+function aboutText() {
+  return [
+    '짱디터 (JJangditer) v' + (cfg.version || ''),
+    '만든이 : 짱스 (JJangs)',
+    '소스   : ' + REPO_URL,
+    '',
+    '[라이선스]',
+    'MIT License — 라이선스 비용이 없습니다.',
+    '사용·복사·수정·배포·상업적 사용 모두 자유롭고,',
+    '별도 구매나 등록 절차가 필요 없습니다. (무보증 / as-is)',
+    '',
+    '[설치 · 권한]',
+    '설치 필요 없음 — exe 파일 하나로 실행됩니다.',
+    '관리자 권한 필요 없음. 레지스트리를 쓰지 않습니다.',
+    '',
+    '[쓰이는 구성요소]',
+    'Microsoft Edge WebView2 Runtime  (윈도우 기본 구성요소)',
+    '.NET Framework 4.8               (윈도우 기본 구성요소)',
+    '',
+    '[주고받는 정보]',
+    '짱디터가 밖으로 보내는 정보는 없습니다.',
+    '업데이트 확인 때만 GitHub 에서 받아오기만 합니다.',
+    '  · latest.json (버전 정보)',
+    '  · 새 버전 exe (사용자가 [업데이트] 를 눌렀을 때만)',
+    '',
+    '[저장 위치]',
+    '설정 · 작업 내용 : ' + (cfg.dataDir || '%APPDATA%\\JJangditer'),
+    '화면 캐시        : %LOCALAPPDATA%\\JJangditer'
+  ].join('\n');
+}
+
+function openAbout() {
+  const m = $('#menu');
+  m.innerHTML = '';
+
+  const hd = document.createElement('div');
+  hd.className = 'hd';
+  hd.textContent = '짱디터 정보';
+  m.appendChild(hd);
+
+  const box = document.createElement('div');
+  box.className = 'aboutbox';
+  box.innerHTML =
+    '<div class="abtop">' +
+      '<div class="abname">짱디터 <span class="abver">v' + esc(cfg.version || '') + '</span></div>' +
+      '<div class="absub">JJangditer — 서버 작업용 사이드 에디터</div>' +
+      '<div class="abby">만든이 <b>짱스 (JJangs)</b></div>' +
+    '</div>' +
+
+    '<div class="abfree">' +
+      '<b>라이선스 없이 자유롭게 쓰셔도 됩니다.</b><br>' +
+      'MIT License — 비용·구매·등록 절차가 없습니다.<br>' +
+      '사내 배포와 수정도 자유롭습니다. (무보증 / as-is)' +
+    '</div>' +
+
+    '<div class="abrow"><span>설치</span><b>필요 없음</b> — exe 하나로 실행</div>' +
+    '<div class="abrow"><span>권한</span>관리자 권한 불필요 · 레지스트리 미사용</div>' +
+    '<div class="abrow"><span>구성</span>Edge WebView2 · .NET Framework 4.8 (윈도우 기본)</div>' +
+    '<div class="abrow"><span>통신</span><b>밖으로 보내는 정보 없음</b><br>' +
+      '업데이트 확인 때만 GitHub 에서 받아오기만 합니다</div>' +
+    '<div class="abrow"><span>저장</span>' + esc(cfg.dataDir || '%APPDATA%\\JJangditer') + '</div>' +
+
+    '<div class="btnline">' +
+      '<button class="abrepo">소스 저장소</button>' +
+      '<button class="ablic">라이선스 전문</button>' +
+      '<button class="abcopy prim">정보 복사</button>' +
+    '</div>';
+  m.appendChild(box);
+
+  $('.abrepo', box).addEventListener('click', () => {
+    window.jj.openUrl(REPO_URL);
+    closePopup();
+  });
+  $('.ablic', box).addEventListener('click', () => {
+    closePopup();
+    const row = normRow({ type: 'text', label: 'MIT License', text: MIT_TEXT });
+    addTab(normTab({ name: uniqueName('라이선스'), rows: [row] }));
+  });
+  $('.abcopy', box).addEventListener('click', () => {
+    copyText(aboutText());
+    closePopup();
+    toast('정보를 복사했습니다 — 보안 점검 답변에 붙여 쓰세요');
+  });
+
+  m.classList.remove('hidden');
+  const r = m.getBoundingClientRect();
+  m.style.left = Math.max(4, Math.round((window.innerWidth - r.width) / 2)) + 'px';
+  m.style.top = '70px';
+  popupOpen = true;
+}
+
 function helpItems() {
   return [
     { hd: '단축키' },
@@ -1624,7 +1744,11 @@ function helpItems() {
     { icon: '', label: 'Ctrl+S = 파일로 저장, Ctrl+Z / Ctrl+Y = 되돌리기' },
     { icon: '', label: '왼쪽 테두리를 드래그하면 폭이 바뀝니다' },
     { sep: true },
-    { icon: 'ⓘ', label: '짱디터 v' + (cfg.version || ''), tag: 'JJangditer' }
+    { sep: true },
+    {
+      icon: 'ⓘ', label: '짱디터 정보', tag: 'v' + (cfg.version || '') + ' · 무료',
+      onClick: openAbout
+    }
   ];
 }
 

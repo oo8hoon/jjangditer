@@ -993,3 +993,61 @@ body.is-doc #toolbar { display: none; }
   color: var(--warn);
   vertical-align: 1px;
 }
+
+
+/* ================= 정보 (About) ================= */
+.aboutbox { width: 330px; padding: 10px 12px 12px; font-size: 11.5px; }
+
+.aboutbox .abtop {
+  text-align: center;
+  padding: 4px 0 10px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 10px;
+}
+.aboutbox .abname { font-size: 17px; font-weight: 700; color: var(--accent); }
+.aboutbox .abver { font-size: 11px; color: var(--fg-dim); font-weight: 400; }
+.aboutbox .absub { color: var(--fg-dim); margin-top: 2px; }
+.aboutbox .abby { color: var(--fg); margin-top: 6px; }
+.aboutbox .abby b { color: var(--warn); }
+
+.aboutbox .abfree {
+  background: rgba(62, 207, 142, .10);
+  border: 1px solid var(--ok);
+  border-radius: 5px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  line-height: 1.6;
+  color: var(--fg);
+}
+.aboutbox .abfree b { color: var(--ok); }
+
+.aboutbox .abrow {
+  display: flex;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px dotted var(--line);
+  color: var(--fg-dim);
+  line-height: 1.5;
+}
+.aboutbox .abrow:last-of-type { border-bottom: 0; }
+.aboutbox .abrow > span {
+  flex: none;
+  width: 34px;
+  color: var(--fg-dim);
+  opacity: .8;
+}
+.aboutbox .abrow b { color: var(--fg); }
+
+.aboutbox .btnline {
+  display: flex; gap: 5px; justify-content: flex-end; margin-top: 12px;
+}
+.aboutbox .btnline button {
+  background: var(--bg3); border: 1px solid var(--line); color: var(--fg-dim);
+  border-radius: 4px; padding: 5px 10px; cursor: pointer; font-size: 11px;
+  font-family: inherit; white-space: nowrap;
+}
+.aboutbox .btnline button:hover { color: var(--fg); border-color: var(--fg-dim); }
+.aboutbox .btnline button.prim {
+  background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600;
+}
+.aboutbox .btnline button.prim:hover { filter: brightness(1.1); color: #fff; }

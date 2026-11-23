@@ -64,6 +64,7 @@
     setPrefs: (p) => call('setPrefs', p),
     copy: (t) => call('copy', t == null ? '' : String(t)),
     paste: () => call('paste'),
+    openUrl: (u) => call('openUrl', u),
     findShow: (mode, preset) => call('findShow', mode || 'find', preset || null),
     findHide: () => call('findHide'),
     findStatus: (t, bad) => call('findStatus', t || '', !!bad),
