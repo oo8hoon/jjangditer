@@ -197,6 +197,32 @@ namespace JJ
         }
 
         static string S(ArrayList a, int i) { return a.Count > i && a[i] != null ? Convert.ToString(a[i]) : null; }
+        /// <summary>파일이 바뀌었는지 가리는 지문 (고친 시각 + 크기). 없으면 빈 문자열.</summary>
+        static string StampOf(string path)
+        {
+            try
+            {
+                var fi = new FileInfo(path);
+                if (!fi.Exists) return "";
+                return fi.LastWriteTimeUtc.Ticks.ToString(CultureInfo.InvariantCulture)
+                     + ":" + fi.Length.ToString(CultureInfo.InvariantCulture);
+            }
+            catch { return ""; }
+        }
+
+        /// <summary>사람이 읽을 수 있게 "11-24 08:12, 783 bytes" 꼴로.</summary>
+        static string WhenOf(string path)
+        {
+            try
+            {
+                var fi = new FileInfo(path);
+                if (!fi.Exists) return "";
+                return fi.LastWriteTime.ToString("MM-dd HH:mm", CultureInfo.InvariantCulture)
+                     + " 에 바뀜, " + fi.Length.ToString("N0", CultureInfo.InvariantCulture) + " bytes";
+            }
+            catch { return ""; }
+        }
+
         static int I(ArrayList a, int i, int def)
         {
             try { return a.Count > i && a[i] != null ? Convert.ToInt32(a[i], CultureInfo.InvariantCulture) : def; }
@@ -315,7 +341,8 @@ namespace JJ
                             string enc;
                             var txt = Store.ReadUserText(path, out enc);
                             return new Dictionary<string, object> {
-                                { "ok", true }, { "text", txt }, { "path", path }, { "enc", enc } };
+                                { "ok", true }, { "text", txt }, { "path", path }, { "enc", enc },
+                                { "stamp", StampOf(path) } };
                         }
                         catch (Exception ex)
                         {
@@ -329,9 +356,23 @@ namespace JJ
                         var path = S(a, 0);
                         if (string.IsNullOrEmpty(path))
                             return new Dictionary<string, object> { { "ok", false } };
+
+                        // 읽어올 때의 지문을 받았으면, 그 사이에 파일이 바뀌지 않았는지 본다.
+                        // 바뀌었으면 쓰지 않고 돌려보낸다 (다른 탭·다른 프로그램이 고친 경우).
+                        var expect = S(a, 3);
+                        if (!string.IsNullOrEmpty(expect) && File.Exists(path))
+                        {
+                            var cur = StampOf(path);
+                            if (cur != expect)
+                                return new Dictionary<string, object> {
+                                    { "ok", false }, { "conflict", true },
+                                    { "path", path }, { "stamp", cur }, { "when", WhenOf(path) } };
+                        }
+
                         bool ok = Store.WriteUserText(path, S(a, 1) ?? "", S(a, 2));
                         if (ok) Remember(path);
-                        return new Dictionary<string, object> { { "ok", ok }, { "path", path } };
+                        return new Dictionary<string, object> {
+                            { "ok", ok }, { "path", path }, { "stamp", ok ? StampOf(path) : "" } };
                     }
 
                 case "confirm3":
@@ -1096,7 +1137,8 @@ namespace JJ
                 if (d.ShowDialog(panel) != DialogResult.OK) return new Dictionary<string, object> { { "ok", false } };
                 Remember(d.FileName);
                 bool ok = Store.WriteUserText(d.FileName, content ?? "", encName);
-                return new Dictionary<string, object> { { "ok", ok }, { "path", d.FileName } };
+                return new Dictionary<string, object> {
+                    { "ok", ok }, { "path", d.FileName }, { "stamp", ok ? StampOf(d.FileName) : "" } };
             }
         }
 
@@ -1120,7 +1162,8 @@ namespace JJ
                     { "name", Path.GetFileNameWithoutExtension(d.FileName) },
                     { "path", d.FileName },
                     { "text", text },
-                    { "enc", enc }
+                    { "enc", enc },
+                    { "stamp", StampOf(d.FileName) }
                 };
             }
         }

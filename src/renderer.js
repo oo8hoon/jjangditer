@@ -32,6 +32,7 @@ function normRow(r) {
     filePath: r.filePath || null,
     encoding: r.encoding || null,
     savedText: typeof r.savedText === 'string' ? r.savedText : null,
+    fileStamp: typeof r.fileStamp === 'string' ? r.fileStamp : null,
     results: (r.results && Array.isArray(r.results.items)) ? r.results : null,
     height: (typeof r.height === 'number' && r.height > 40) ? Math.min(r.height, 6000) : null,
     fit: !!r.fit,                      // true = 패널 높이에 항상 맞춤
@@ -539,13 +540,17 @@ function renderTabs() {
   for (const t of ws.tabs) {
     const c = countOf(t.rows);
     const el = document.createElement('div');
+    const shared = tabSharesFile(t);
     el.className = 'tab' + (t.id === ws.activeTabId ? ' active' : '') +
       (c.total > 0 && c.done === c.total ? ' alldone' : '') +
-      (unsavedFileRows(t).length ? ' dirty' : '');
+      (unsavedFileRows(t).length ? ' dirty' : '') +
+      (shared ? ' shared' : '');
     el.dataset.id = t.id;
     el.draggable = true;
-    el.title = t.name + (unsavedFileRows(t).length ? '  (저장 안 된 내용 있음)' : '');
+    el.title = t.name + (unsavedFileRows(t).length ? '  (저장 안 된 내용 있음)' : '') +
+      (shared ? '\n\u26a0 같은 파일이 다른 탭에도 열려 있습니다' : '');
     el.innerHTML = '<span class="tname">' + esc(t.name) + '</span>' +
+      (shared ? '<span class="tshare" title="같은 파일이 다른 탭에도 열려 있습니다">\u26a0</span>' : '') +
       '<span class="tcount">' + c.done + '/' + c.total + '</span>' +
       '<button class="tclose" title="이 탭 닫기 (내용도 함께 지워집니다)">✕</button>';
     host.appendChild(el);
@@ -966,9 +971,68 @@ function hasLocalContent(tab) {
   });
 }
 
+
+/* ================= 같은 파일을 두 곳에서 고칠 때 ================= */
+
+/** 같은 파일을 열어둔 다른 블록을 찾는다 (윈도우라 대소문자는 안 가린다) */
+function findOpenRow(path, exceptRowId) {
+  if (!path) return null;
+  const key = path.toLowerCase();
+  for (const t of ws.tabs) {
+    for (const r of t.rows) {
+      if (r.filePath && r.filePath.toLowerCase() === key && r.id !== exceptRowId) {
+        return { tab: t, row: r };
+      }
+    }
+  }
+  return null;
+}
+
+/** 이 탭이 다른 탭과 같은 파일을 쓰고 있나 */
+function tabSharesFile(tab) {
+  return tab.rows.some((r) => r.filePath && findOpenRow(r.filePath, r.id));
+}
+
+/**
+ * 파일에 쓴다.
+ * 읽어온 뒤로 파일이 바뀌었으면 (다른 탭에서 저장했거나, 밖에서 고쳤거나)
+ * 그냥 덮지 않고 먼저 물어본다.
+ * 돌려주는 값 : { ok, path, stamp } / 그만두면 null
+ */
+async function putFile(row, text, asNew, nameHint) {
+  const enc = row.encoding || 'UTF-8';
+  if (asNew || !row.filePath) return await window.jj.saveTextAs(nameHint, text, enc);
+
+  let r = await window.jj.saveTextTo(row.filePath, text, enc, row.fileStamp || null);
+  if (r && r.conflict) {
+    const other = findOpenRow(row.filePath, row.id);
+    const why = other
+      ? '같은 파일이 탭 "' + other.tab.name + '" 에도 열려 있습니다.\n' +
+        '그 탭에서 저장한 내용을 지금 덮어쓰게 됩니다.'
+      : '짱디터 밖에서 이 파일이 바뀌었습니다.';
+    const ans = await window.jj.confirm3(
+      '이 파일은 열어본 뒤로 내용이 바뀌었습니다. 그대로 덮어쓸까요?',
+      row.filePath + '\n' +
+      (r.when ? '지금 파일 : ' + r.when + '\n' : '') + '\n' + why + '\n\n' +
+      '[예] 덮어쓰기    [아니오] 다른 이름으로 저장    [취소] 저장 안 함');
+    if (ans === 'cancel') return null;
+    if (ans === 'no') return await window.jj.saveTextAs(nameHint, text, enc);
+    r = await window.jj.saveTextTo(row.filePath, text, enc, null);   // 뜻을 밝혔으니 그냥 쓴다
+  }
+  return r;
+}
+
+/** 저장이 끝난 블록에 새 지문을 적어 둔다 */
+function markSaved(row, r, text) {
+  row.filePath = (r && r.path) || row.filePath;
+  row.encoding = row.encoding || 'UTF-8';
+  row.savedText = text;
+  row.fileStamp = (r && r.stamp) || null;
+}
+
 async function saveRowToFile(row) {
-  const r = await window.jj.saveTextTo(row.filePath, row.text, row.encoding || 'UTF-8');
-  if (r && r.ok) { row.savedText = row.text; return true; }
+  const r = await putFile(row, row.text, false, row.label || '글');
+  if (r && r.ok) { markSaved(row, r, row.text); return true; }
   return false;
 }
 
@@ -1020,9 +1084,27 @@ async function openTextFile() {
     if (r && r.error) toast(r.error);
     return;
   }
+  // 이미 열어둔 파일이면 한 번 알려 준다 (모르고 두 탭에서 고치면 서로 덮어쓴다)
+  const dup = findOpenRow(r.path);
+  if (dup) {
+    const ans = await window.jj.confirm3(
+      '이 파일은 이미 탭 "' + dup.tab.name + '" 에 열려 있습니다.',
+      r.path + '\n\n' +
+      '두 탭에서 따로 고치면 나중에 저장한 쪽이 먼저 저장한 내용을 덮어씁니다.\n\n' +
+      '[예] 열려 있는 탭으로 가기    [아니오] 새 탭으로 또 열기    [취소] 그만두기');
+    if (ans === 'cancel') return;
+    if (ans === 'yes') {
+      ws.activeTabId = dup.tab.id;
+      render();
+      toast('이미 열려 있는 탭으로 왔습니다');
+      return;
+    }
+    toast('또 열었습니다 — 저장할 때 덮어쓰기 전에 물어봅니다');
+  }
+
   // 파일 하나 = 글 블록 하나를 가진 새 탭
   const row = normRow({ type: 'text', label: r.name || '글', text: r.text,
-    filePath: r.path, encoding: r.enc, savedText: r.text });
+    filePath: r.path, encoding: r.enc, savedText: r.text, fileStamp: r.stamp || null });
   const t = normTab({ name: uniqueName(r.name || '새 글'), rows: [row] });
   addTab(t);
   pushRecent('file', r.name || '글', r.path);
@@ -1085,7 +1167,7 @@ async function reopenFile(path, label, line, q) {
   busy = false;
   if (!r || !r.ok) { toast(r && r.error ? r.error : '파일을 열지 못했습니다'); return; }
   const row = normRow({ type: 'text', label: label || '글', text: r.text,
-    filePath: path, encoding: r.enc, savedText: r.text });
+    filePath: path, encoding: r.enc, savedText: r.text, fileStamp: r.stamp || null });
   const t = normTab({ name: uniqueName(label || '새 글'), rows: [row] });
   addTab(t);
   pushRecent('file', label || '글', path);
@@ -2612,17 +2694,12 @@ async function saveTabFile(id, asNew) {
 
   if (tab.id === ws.activeTabId && !zoomCtx) { await saveCurrentFile(asNew); return; }
 
-  const enc = row.encoding || 'UTF-8';
   busy = true;
-  let r;
-  if (!asNew && row.filePath) r = await window.jj.saveTextTo(row.filePath, row.text, enc);
-  else r = await window.jj.saveTextAs(suggestName(row, tab), row.text, enc);
+  const r = await putFile(row, row.text, asNew, suggestName(row, tab));
   busy = false;
   if (!r || !r.ok) return;
 
-  row.filePath = r.path || row.filePath;
-  row.encoding = row.encoding || 'UTF-8';
-  row.savedText = row.text;
+  markSaved(row, r, row.text);
 
   const base = row.filePath.split(/[\\/]/).pop();
   if (asNew || !row.label) {
@@ -2654,17 +2731,12 @@ async function saveCurrentFile(asNew) {
   // 쓰던 자리를 적어 둔다 (저장하고 나서 그대로 이어 쓸 수 있도록)
   const caret = keepCaret();
 
-  const enc = row.encoding || 'UTF-8';
   busy = true;
-  let r;
-  if (!asNew && row.filePath) r = await window.jj.saveTextTo(row.filePath, row.text, enc);
-  else r = await window.jj.saveTextAs(suggestName(row), row.text, enc);
+  const r = await putFile(row, row.text, asNew, suggestName(row));
   busy = false;
   if (!r || !r.ok) { restoreCaret(caret); return; }
 
-  row.filePath = r.path || row.filePath;
-  row.encoding = row.encoding || 'UTF-8';
-  row.savedText = row.text;
+  markSaved(row, r, row.text);
 
   // 다른 이름으로 저장했으면 블록·탭 이름도 새 파일 이름을 따른다
   const base = row.filePath.split(/[\\/]/).pop();
@@ -2704,15 +2776,10 @@ async function saveZoomToFile(asNew) {
   };
 
   busy = true;
-  let r;
-  const enc = row.encoding || 'UTF-8';
-  if (!asNew && row.filePath) r = await window.jj.saveTextTo(row.filePath, text, enc);
-  else r = await window.jj.saveTextAs(row.label || activeTab().name, text, enc);
+  const r = await putFile(row, text, asNew, row.label || activeTab().name);
   busy = false;
   if (!r || !r.ok) { backZ(); return; }
-  row.filePath = r.path || row.filePath;
-  if (!row.encoding) row.encoding = 'UTF-8';
-  row.savedText = text;
+  markSaved(row, r, text);
   row[zoomCtx.field] = text;
 
   const base = row.filePath.split(/[\\/]/).pop();

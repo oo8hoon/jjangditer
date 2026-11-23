@@ -85,7 +85,8 @@
     openText: () => call('openText'),
     readText: (path) => call('readText', path),
     saveTextAs: (name, text, enc) => call('saveTextAs', name, text, enc || null),
-    saveTextTo: (path, text, enc) => call('saveTextTo', path, text, enc || null),
+    saveTextTo: (path, text, enc, stamp) =>
+      call('saveTextTo', path, text, enc || null, stamp || null),
     import: () => call('import').then(function (r) {
       if (!r || !r.ok) return { ok: false, items: [] };
       return {

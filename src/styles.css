@@ -1051,3 +1051,13 @@ body.is-doc #toolbar { display: none; }
   background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600;
 }
 .aboutbox .btnline button.prim:hover { filter: brightness(1.1); color: #fff; }
+
+
+/* 같은 파일이 다른 탭에도 열려 있을 때 */
+#tabs .tab .tshare {
+  margin-left: 3px;
+  font-size: 10px;
+  color: var(--warn);
+  vertical-align: 1px;
+}
+#tabs .tab.shared { border-bottom: 2px solid var(--warn); }
