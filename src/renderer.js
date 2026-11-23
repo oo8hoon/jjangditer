@@ -589,14 +589,6 @@ function buildCmd(row, vars) {
     '<div class="docwrap"><div class="hilite"></div><div class="colsel"></div>' +
     '<textarea class="code" data-field="cmd" rows="1" wrap="off"' + heightAttr(row) +
     ' placeholder="실행할 명령어 ( {{키}} 로 위 항목 값 참조 )" spellcheck="false">' + esc(row.cmd) + '</textarea>' +
-    '<div class="findwrap slim hidden">' +
-    '<input class="fq" type="text" placeholder="찾을 내용" spellcheck="false">' +
-    '<span class="fcount"></span>' +
-    '<button class="fprev" title="이전 (Shift+F3)">\u25b2</button>' +
-    '<button class="fnext" title="다음 (F3)">\u25bc</button>' +
-    '<label class="fcslab" title="대/소문자 구분"><input type="checkbox" class="fcs"> Aa</label>' +
-    '<button class="fclose" title="닫기 (Esc)">\u2715</button>' +
-    '</div>' +
     '</div>' +
     '<div class="cmdfoot"><div class="resolved">' + esc(res !== row.cmd ? res : '') + '</div>' +
     '<button class="zoombtn" data-act="find" data-f="cmd" title="이 명령에서 찾기 (Ctrl+F)">🔎 찾기</button>' +
@@ -669,14 +661,6 @@ function buildText(row, vars) {
     '<div class="docwrap"><div class="hilite"></div><div class="colsel"></div>' +
     '<textarea class="memo" data-field="text" rows="1" wrap="off"' + heightAttr(row) +
     ' placeholder="내용을 입력하세요" spellcheck="false">' + esc(row.text) + '</textarea>' +
-    '<div class="findwrap slim hidden">' +
-    '<input class="fq" type="text" placeholder="찾을 내용" spellcheck="false">' +
-    '<span class="fcount"></span>' +
-    '<button class="fprev" title="이전 (Shift+F3)">\u25b2</button>' +
-    '<button class="fnext" title="다음 (F3)">\u25bc</button>' +
-    '<label class="fcslab" title="대/소문자 구분"><input type="checkbox" class="fcs"> Aa</label>' +
-    '<button class="fclose" title="닫기 (Esc)">\u2715</button>' +
-    '</div>' +
     '</div>' +
     '<div class="txtfoot"><div class="resolved">' + esc(res !== row.text ? res : '') + '</div>' +
     '<button data-act="find" data-f="text" title="이 글에서 찾기 (Ctrl+F)">🔎 찾기</button>' +
@@ -727,6 +711,19 @@ function renderRows() {
       '<div class="ehint">텍스트 파일을 열려면 <b>파일 \u2192 텍스트 파일 열기</b> (Ctrl+O)</div>' +
       '</div>';
     return;
+  }
+
+  // '미완료만' 이 켜져 있는데 전부 끝났으면 빈 화면이 된다 -> 알려 준다
+  if (ws.ui.filterUndone) {
+    const items = tab.rows.filter((r) => r.type !== 'section');
+    if (items.length && items.every((r) => r.done)) {
+      host.innerHTML = '<div class="empty">' +
+        '<div class="etitle">이 탭은 모두 끝났습니다 \u2714</div>' +
+        '<div class="ebtns"><button data-showall="1">\ud83d\udc41 전체 보기</button></div>' +
+        '<div class="ehint">지금 <b>미완료만</b> 보기가 켜져 있어 완료된 항목이 숨겨졌습니다.</div>' +
+        '</div>';
+      return;
+    }
   }
 
   const vars = varsOf(tab);
@@ -1190,6 +1187,230 @@ function tabToMarkdown(tab) {
     }
   }
   return out.join('\n');
+}
+
+
+/* ================= 상단 찾기 줄 =================
+ * 블록 아래가 아니라 늘 같은 자리(위)에 뜬다.
+ * 범위를 '이 글' / '이 탭' 으로 고를 수 있다.
+ */
+const fb = {
+  open: false,
+  scope: 'row',        // 'row' = 이 글, 'tab' = 이 탭 전체
+  q: '',
+  cs: false,
+  hits: [],            // [{ rowId, field, k }]  k = 그 글 안에서 몇 번째
+  i: -1,
+  rowId: null          // '이 글' 일 때 대상
+};
+
+function fbEl(sel) { return document.querySelector('#findbar ' + sel); }
+
+/** 지금 찾기 대상이 될 글 블록 (커서가 있는 칸 > 이 탭의 첫 글) */
+function findTargetRow() {
+  const el = document.activeElement;
+  const ta = el && el.closest ? el.closest('textarea.memo, textarea.code') : null;
+  if (ta) {
+    const h = ta.closest('[data-id]');
+    const r = h && rowById(h.dataset.id);
+    if (r) return r;
+  }
+  if (fb.rowId) { const r = rowById(fb.rowId); if (r) return r; }
+  const tab = activeTab();
+  if (!tab) return null;
+  return tab.rows.find((r) => r.type === 'text' && !r.results)
+      || tab.rows.find((r) => r.type === 'cmd') || null;
+}
+
+function fieldOf(row) { return row.type === 'cmd' ? 'cmd' : 'text'; }
+
+/** 그 블록의 글 칸 (없으면 null) */
+function taOf(rowId, field) {
+  return document.querySelector('#rows .row[data-id="' + rowId + '"] textarea[data-field="' +
+    (field || 'text') + '"]');
+}
+
+function openFindBar(preset) {
+  const row = findTargetRow();
+  if (!row) { toast('이 탭에는 찾을 글이 없습니다'); return; }
+  fb.rowId = row.id;
+  fb.open = true;
+  $('#findbar').classList.remove('hidden');
+  fbEl('.fscope').textContent = fb.scope === 'tab' ? '이 탭' : '이 글';
+
+  const qi = fbEl('.fq');
+  const pick = preset || (window.JJDoc.selText ? window.JJDoc.selText() : '');
+  if (pick) qi.value = pick;
+  qi.focus();
+  qi.select();
+  runFindBar(false);
+}
+
+function closeFindBar() {
+  fb.open = false;
+  fb.hits = []; fb.i = -1;
+  $('#findbar').classList.add('hidden');
+  if (window.JJDoc.clearFind) window.JJDoc.clearFind();
+  const row = fb.rowId && rowById(fb.rowId);
+  if (row) { const t = taOf(row.id, fieldOf(row)); if (t) t.focus(); }
+}
+
+/** 한 글 안에서 찾을 말이 몇 번 나오는지 */
+function countIn(text, q, cs) {
+  if (!q) return 0;
+  const hay = cs ? text : text.toLowerCase();
+  const needle = cs ? q : q.toLowerCase();
+  let n = 0, i = 0;
+  for (;;) {
+    const at = hay.indexOf(needle, i);
+    if (at < 0) break;
+    n++; i = at + needle.length;
+    if (n > 20000) break;
+  }
+  return n;
+}
+
+/** 찾기 목록을 다시 만든다 */
+function runFindBar(move) {
+  fb.q = fbEl('.fq').value;
+  fb.cs = fbEl('.fcs').checked;
+  fb.hits = [];
+  fb.i = -1;
+
+  const tab = activeTab();
+  if (!tab || !fb.q) { updateFindBarUI(); if (window.JJDoc.clearFind) window.JJDoc.clearFind(); return; }
+
+  const rows = fb.scope === 'tab'
+    ? tab.rows.filter((r) => (r.type === 'text' && !r.results) || r.type === 'cmd')
+    : [rowById(fb.rowId)].filter(Boolean);
+
+  for (const r of rows) {
+    const f = fieldOf(r);
+    const n = countIn(r[f] || '', fb.q, fb.cs);
+    for (let k = 0; k < n; k++) fb.hits.push({ rowId: r.id, field: f, k: k });
+  }
+
+  fb.i = fb.hits.length ? 0 : -1;
+  fb.moved = false;
+  updateFindBarUI();
+  if (fb.hits.length && move !== false) gotoHit(0);
+  else if (fb.hits.length) {
+    // 입력 중에는 자리만 칠해 둔다
+    const first = fb.hits[0];
+    const t = taOf(first.rowId, first.field);
+    if (t) { bindDocTo(t); window.JJDoc.setFind(fb.q, fb.cs); }
+  }
+}
+
+function updateFindBarUI() {
+  const c = fbEl('.fcount');
+  if (!fb.q) { c.textContent = ''; c.classList.remove('none'); return; }
+  if (!fb.hits.length) { c.textContent = '없음'; c.classList.add('none'); return; }
+  c.classList.remove('none');
+  c.textContent = (fb.i + 1) + ' / ' + fb.hits.length +
+    (fb.scope === 'tab' ? ' (탭 전체)' : '');
+}
+
+/** n 번째 결과로 간다 */
+function gotoHit(n) {
+  if (!fb.hits.length) return;
+  fb.i = ((n % fb.hits.length) + fb.hits.length) % fb.hits.length;
+  fb.moved = true;
+  const h = fb.hits[fb.i];
+
+  const t = taOf(h.rowId, h.field);
+  if (!t) return;
+  t.focus();
+  bindDocTo(t);
+  window.JJDoc.setFind(fb.q, fb.cs);
+  window.JJDoc.gotoIndex(h.k);
+  updateFindBarUI();
+
+  // 다른 블록으로 넘어갔으면 그 블록이 보이게 한다
+  const rowEl = t.closest('.row');
+  if (rowEl) {
+    const host = $('#rows');
+    const rb = rowEl.getBoundingClientRect(), hb = host.getBoundingClientRect();
+    if (rb.top < hb.top || rb.bottom > hb.bottom) {
+      rowEl.scrollIntoView({ block: 'nearest' });
+    }
+  }
+}
+
+function findStep(dir) {
+  if (!fb.open) {
+    // 찾기 줄이 닫혀 있으면 고른 낱말로 바로 찾는다
+    const el = document.activeElement;
+    const ta = el && el.closest ? el.closest('textarea.memo, textarea.code') : null;
+    if (ta) bindDocTo(ta);
+    const pick = window.JJDoc.selText ? window.JJDoc.selText() : '';
+    if (pick) { openFindBar(pick); return; }
+    if (!fb.q) return;
+    openFindBar(fb.q);
+    return;
+  }
+  if (!fb.hits.length) { runFindBar(true); return; }
+  // 아직 한 번도 안 옮겼으면 첫 결과부터
+  if (!fb.moved) { gotoHit(fb.i < 0 ? 0 : fb.i); return; }
+  gotoHit(fb.i + (dir < 0 ? -1 : 1));
+}
+
+/** 아이콘 줄 — 자주 쓰는 것만 */
+function bindIconbar() {
+  const bar = $('#iconbar');
+  if (!bar) return;
+  bar.addEventListener('click', async (e) => {
+    const b = e.target.closest('button[data-ic]');
+    if (!b) return;
+    const row = findTargetRow();
+    const ta = row ? taOf(row.id, fieldOf(row)) : null;
+
+    switch (b.dataset.ic) {
+      case 'open':   openTextFile(); break;
+      case 'save':   saveCurrentFile(false); break;
+      case 'saveas': saveCurrentFile(true); break;
+      case 'find':   openFindBar(); break;
+      case 'fif':    openFindInFiles(window.innerWidth - 24, 60); break;
+      case 'undo':   if (ta) { ta.focus(); bindDocTo(ta); } window.JJDoc.undo(); break;
+      case 'redo':   if (ta) { ta.focus(); bindDocTo(ta); } window.JJDoc.redo(); break;
+      case 'col':
+        if (row) toggleColHere(row.id, fieldOf(row));
+        else toast('열 편집할 글이 없습니다');
+        break;
+      case 'fit':
+        if (row) {
+          row.fit = !row.fit;
+          if (row.fit) row.height = null;
+          rerender(); scheduleSave();
+        }
+        break;
+      case 'copy':
+        if (row) copyText(resolve(row[fieldOf(row)], varsOf(activeTab())));
+        else toast('복사할 글이 없습니다');
+        break;
+      case 'newtab': addTabMenu(60, 80); break;
+    }
+  });
+}
+
+function bindFindBar() {
+  const qi = fbEl('.fq');
+  qi.addEventListener('input', () => runFindBar(false));
+  qi.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); findStep(e.shiftKey ? -1 : 1); }
+    else if (e.key === 'Escape') { e.preventDefault(); closeFindBar(); }
+  });
+  fbEl('.fnext').addEventListener('click', () => findStep(1));
+  fbEl('.fprev').addEventListener('click', () => findStep(-1));
+  fbEl('.fcs').addEventListener('change', () => runFindBar(false));
+  fbEl('.fclose').addEventListener('click', closeFindBar);
+  fbEl('.fscope').addEventListener('click', () => {
+    fb.scope = fb.scope === 'tab' ? 'row' : 'tab';
+    fbEl('.fscope').textContent = fb.scope === 'tab' ? '이 탭' : '이 글';
+    fbEl('.fscope').classList.toggle('on', fb.scope === 'tab');
+    toast(fb.scope === 'tab' ? '이 탭 전체에서 찾습니다' : '이 글에서만 찾습니다');
+    runFindBar(false);
+  });
 }
 
 /* ================= 팝업 메뉴 ================= */
@@ -2826,6 +3047,14 @@ function bindRows() {
   host.addEventListener('focusin', attachDoc);
   host.addEventListener('mousedown', attachDoc, true);   // 누르는 즉시
 
+  // '전체 보기' 단추
+  host.addEventListener('click', (e) => {
+    if (!e.target.closest('[data-showall]')) return;
+    ws.ui.filterUndone = false;
+    $('#btnFilter').classList.remove('on');
+    rerender(); saveNow();
+  });
+
   // 빈 탭에서 바로 추가
   host.addEventListener('click', (e) => {
     const b = e.target.closest('[data-new]');
@@ -2872,13 +3101,9 @@ function bindRows() {
       toggleColHere(row.id, btn.dataset.f);
     } else if (act === 'find') {
       const fta = holder.querySelector('textarea');
-      if (fta && !zoomCtx) {
-        fta.focus();
-        bindDocTo(fta);
-        window.JJDoc.openFind(false);
-      } else {
-        openZoomFind(row.id, btn.dataset.f);
-      }
+      if (fta) { fta.focus(); bindDocTo(fta); }
+      fb.rowId = row.id;
+      openFindBar();
     } else if (act === 'zoom') {
       openZoom(row.id, btn.dataset.f, row.label);
     } else if (act === 'refind') {
@@ -3205,15 +3430,15 @@ function bindChrome() {
 
     // F3 : 다음 찾기 / Shift+F3 : 이전 찾기
     // 찾을 말이 없으면 지금 고른 낱말로 찾는다 (더블클릭 -> F3)
+    // F3 : 다음 / Shift+F3 : 이전.  고른 낱말이 있으면 그 말로 바로 찾는다.
     if (e.key === 'F3') {
-      const fta = e.target.closest && e.target.closest('textarea.memo, textarea.code');
-      // 글 칸 안이면 doc.js 가 이미 처리했다 (두 번 처리하면 한 칸 더 건너뛴다)
-      if (fta && fta.dataset.jjbound === '1') return;
       e.preventDefault();
-      if (fta && !zoomCtx) bindDocTo(fta);
-      if (window.JJDoc.findNext) window.JJDoc.findNext(e.shiftKey ? -1 : 1);
+      if (zoomCtx) { window.JJDoc.findNext(e.shiftKey ? -1 : 1); return; }
+      findStep(e.shiftKey ? -1 : 1);
       return;
     }
+    // 찾기 줄이 열려 있으면 Esc 로 닫는다
+    if (e.key === 'Escape' && fb.open) { e.preventDefault(); closeFindBar(); return; }
     const ctrl = e.ctrlKey || e.metaKey;
 
     // Alt+C : 글·명령 칸에서 눌러도 그 자리에서 열 편집이 켜진다.
@@ -3265,19 +3490,10 @@ function bindChrome() {
     }
     else if (k === 'f') {
       e.preventDefault();
-      // 글 칸 안에서 눌렀으면 그 자리에서 찾는다 (편집기를 열지 않는다)
-      const inTa = e.target.closest && e.target.closest('textarea.memo, textarea.code');
-      if (inTa && !zoomCtx) {
-        bindDocTo(inTa);
-        window.JJDoc.openFind(false);
-        return;
-      }
-      const ta = e.target.closest && e.target.closest('textarea.memo, textarea.code');
-      if (ta) {
-        const holder = ta.closest('[data-id]');
-        if (holder) { findInCurrentText(holder.dataset.id); return; }
-      }
-      $('#btnFilter').click();
+      // 편집기 안이면 편집기 찾기, 아니면 상단 찾기 줄
+      if (zoomCtx) { window.JJDoc.openFind(false); return; }
+      openFindBar();
+      return;
     }
     else if (k === 'e') { e.preventDefault(); exportTab(ws.activeTabId); }
     else if (k === 's') {
@@ -3381,6 +3597,8 @@ function applyState(s) {
 
   render();
   bindRows();
+  bindIconbar();
+  bindFindBar();
   bindTabs();
   bindChrome();
   bindDock();

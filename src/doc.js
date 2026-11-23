@@ -834,6 +834,30 @@
     },
     text: function () { return ta ? ta.value : ''; },
     openFind: function (withReplace) { if (ta) return openFind(withReplace); return false; },
+    /** 찾을 말을 정하고 바로 찾는다. 찾은 개수를 돌려준다 */
+    setFind: function (text, cs) {
+      if (!ta) return 0;
+      find.q = text == null ? '' : String(text);
+      find.cs = !!cs;
+      runFind(false);
+      return find.matches.length;
+    },
+    /** k 번째 결과로 간다 */
+    gotoIndex: function (k) { if (ta && find.matches.length) gotoMatch(k); },
+    /** 지금 찾은 개수 / 몇 번째인지 */
+    matchCount: function () { return find.matches.length; },
+    matchIndex: function () { return find.idx; },
+    /** 지금 고른 글자 (한 줄짜리만) */
+    selText: function () {
+      if (!ta) return '';
+      const t = ta.value.slice(ta.selectionStart, ta.selectionEnd);
+      return (t && t.indexOf('\n') < 0) ? t : '';
+    },
+    /** 칠하기를 지운다 */
+    clearFind: function () {
+      find.q = ''; find.matches = []; find.idx = -1; find.hl = false;
+      if (hilBox) hilBox.innerHTML = '';
+    },
     /** F3 : 다음(1) / 이전(-1) 찾기. 고른 낱말이 있으면 그 말로 새로 찾는다 */
     findNext: function (dir) { return findNext(dir); },
     /** 찾기 줄이 열려 있는지 */

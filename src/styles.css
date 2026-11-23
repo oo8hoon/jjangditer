@@ -919,71 +919,115 @@ body.is-doc #toolbar { display: none; }
 }
 
 
-/* ================= 블록 안 얇은 찾기 줄 ================= */
-.row .docwrap .findwrap.slim {
-  position: absolute;
-  right: 10px;
-  top: 6px;
-  z-index: 5;
+/* 찾은 곳 칠하기 — 지금 보고 있는 곳은 더 진하게 */
+.row .docwrap .hil { background: rgba(255, 182, 72, .32); border-radius: 2px; }
+.row .docwrap .hil.cur { background: rgba(255, 182, 72, .62); outline: 1px solid var(--warn); }
+
+
+/* ================= 메뉴 밑 아이콘 줄 ================= */
+#iconbar {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 2px 6px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+#iconbar button {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--fg-dim);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 4px 7px;
+}
+#iconbar button:hover {
+  background: var(--bg3);
+  border-color: var(--line);
+  color: var(--accent);
+}
+#iconbar button:active { background: var(--accent-dim); }
+#iconbar .sep {
+  width: 1px;
+  height: 15px;
+  background: var(--line);
+  margin: 0 4px;
+}
+
+/* ================= 상단 찾기 줄 ================= */
+#findbar {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 3px 4px 3px 6px;
+  padding: 4px 6px;
   background: var(--bg3);
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, .45);
+  border-bottom: 1px solid var(--accent);
+  flex: none;
 }
-.row .docwrap .findwrap.slim.hidden { display: none; }
+#findbar.hidden { display: none; }
 
-.row .docwrap .findwrap.slim .fq {
-  width: 150px;
+#findbar .fscope {
+  flex: none;
+  background: var(--bg2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--fg-dim);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+#findbar .fscope:hover { border-color: var(--accent); color: var(--accent); }
+#findbar .fscope.on { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+
+#findbar .fq {
+  flex: 1;
+  min-width: 0;
   background: var(--bg);
   border: 1px solid var(--line);
-  border-radius: 3px;
+  border-radius: 4px;
   color: var(--fg);
-  font: 11.5px var(--mono);
-  padding: 2px 6px;
+  font: 12px var(--mono);
+  padding: 3px 7px;
   outline: none;
 }
-.row .docwrap .findwrap.slim .fq:focus { border-color: var(--accent); }
+#findbar .fq:focus { border-color: var(--accent); }
 
-.row .docwrap .findwrap.slim .fcount {
-  min-width: 44px;
-  text-align: center;
+#findbar .fcount {
+  flex: none;
+  min-width: 72px;
+  text-align: right;
   font-size: 10.5px;
   color: var(--fg-dim);
   white-space: nowrap;
 }
-.row .docwrap .findwrap.slim .fcount.none { color: var(--danger); }
+#findbar .fcount.none { color: var(--danger); }
 
-.row .docwrap .findwrap.slim button {
+#findbar button:not(.fscope) {
+  flex: none;
   background: transparent;
   border: 0;
+  border-radius: 4px;
   color: var(--fg-dim);
   cursor: pointer;
   font-size: 11px;
-  padding: 2px 5px;
-  border-radius: 3px;
+  padding: 3px 6px;
   line-height: 1;
 }
-.row .docwrap .findwrap.slim button:hover { background: var(--accent-dim); color: var(--accent); }
-.row .docwrap .findwrap.slim .fclose:hover { background: var(--danger); color: #fff; }
+#findbar button:not(.fscope):hover { background: var(--accent-dim); color: var(--accent); }
+#findbar .fclose:hover { background: var(--danger); color: #fff; }
 
-.row .docwrap .findwrap.slim .fcslab {
-  font-size: 10.5px;
-  color: var(--fg-dim);
+#findbar .fcslab {
+  flex: none;
   display: flex;
   align-items: center;
   gap: 2px;
+  font-size: 10.5px;
+  color: var(--fg-dim);
   cursor: pointer;
   user-select: none;
 }
-.row .docwrap .findwrap.slim .fcslab input { margin: 0; }
-
-/* 블록 안에서는 바꾸기 칸을 쓰지 않는다 */
-.row .docwrap .findwrap.slim .rrow { display: none; }
-
-/* 찾은 곳 칠하기 — 지금 보고 있는 곳은 더 진하게 */
-.row .docwrap .hil { background: rgba(255, 182, 72, .32); border-radius: 2px; }
-.row .docwrap .hil.cur { background: rgba(255, 182, 72, .62); outline: 1px solid var(--warn); }
+#findbar .fcslab input { margin: 0; }
