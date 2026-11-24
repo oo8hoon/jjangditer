@@ -1610,6 +1610,19 @@ const IC_ALL = [
     run: () => { toast('업데이트 확인 중…'); window.jj.checkUpdate(); } },
   { id: 'about',  ic: '\u24d8', label: '짱디터 정보', title: '짱디터 정보',
     run: () => openAbout() },
+  { id: 'colfill', ic: '\u270e', label: '열 채우기', title: '세로로 잡은 칸을 같은 글로 채우기',
+    run: () => { if (colReady()) colFillDlg(); } },
+  { id: 'colnum',  ic: '\u2460', label: '숫자 넣기', title: '세로로 잡은 칸에 1, 2, 3 … 넣기',
+    run: () => { if (colReady()) colNumDlg(); } },
+  { id: 'colsum',  ic: '\u03a3', label: '열 합계', title: '세로로 잡은 숫자 더하기',
+    run: () => {
+      if (!colReady()) return;
+      const r = window.JJDoc.sumRect();
+      if (!r) return;
+      const t = r.sum.toLocaleString(undefined, { maximumFractionDigits: 6 });
+      copyText(t);
+      toast('합계 ' + t + '  (숫자 ' + r.count + '개) — 복사했습니다');
+    } },
   { id: 'icset',  ic: '\u22ef', label: '아이콘 편집', title: '이 줄에 둘 아이콘 고르기',
     run: () => iconbarSettings() }
 ];
@@ -1744,6 +1757,233 @@ function iconbarSettings() {
   m.style.left = Math.max(4, Math.round((window.innerWidth - r.width) / 2)) + 'px';
   m.style.top = '60px';
   popupOpen = true;
+}
+
+
+/* ================= 열(세로) 편집 =================
+   Alt+C 로 세로로 잡은 다음, 그 칸을 한꺼번에 채우거나 번호를 매긴다.   */
+
+/** 지금 글 칸을 붙잡아 둔다 (메뉴를 누르면 포커스가 옮겨가므로) */
+function colGrab() {
+  const row = findTargetRow();
+  const ta = row ? taOf(row.id, fieldOf(row)) : null;
+  if (ta) bindDocTo(ta);
+  return row;
+}
+
+/** 세로로 잡힌 게 있는지 확인하고, 없으면 알려 준다 */
+function colReady() {
+  colGrab();
+  if (!window.JJDoc.hasRect || !window.JJDoc.hasRect()) {
+    toast('먼저 Alt+C 로 열 편집을 켜고 세로로 잡아 주세요');
+    return false;
+  }
+  return true;
+}
+
+function colItems() {
+  const on = !!(window.JJDoc.hasRect && window.JJDoc.hasRect());
+  const n = (window.JJDoc.rectLines && window.JJDoc.rectLines()) || 0;
+  return [
+    {
+      icon: '\u25a5', label: '열 편집 모드', tag: 'Alt+C',
+      onClick: () => {
+        const row = findTargetRow();
+        if (row) toggleColHere(row.id, fieldOf(row));
+        else toast('열 편집할 글이 없습니다');
+      }
+    },
+    { sep: true },
+    { hd: on ? ('세로로 ' + n + '줄 잡혀 있습니다') : '먼저 세로로 잡으세요 (Alt+C)' },
+    {
+      icon: '\u270e', label: '열 채우기…', tag: '같은 글로',
+      onClick: () => { if (colReady()) colFillDlg(); }
+    },
+    {
+      icon: '\u2460', label: '숫자 넣기…', tag: '1, 2, 3 …',
+      onClick: () => { if (colReady()) colNumDlg(); }
+    },
+    { sep: true },
+    {
+      icon: '\u29c9', label: '열 복사', tag: 'Ctrl+C',
+      onClick: () => { if (colReady()) window.JJDoc.copyRect(); }
+    },
+    {
+      icon: '\u2702', label: '열 잘라내기', tag: 'Ctrl+X',
+      onClick: () => { if (colReady()) window.JJDoc.cutRect(); }
+    },
+    {
+      icon: '\u2715', label: '열 삭제', tag: 'Del',
+      onClick: () => {
+        if (!colReady()) return;
+        const k = window.JJDoc.deleteRect();
+        toast(k + '줄에서 지웠습니다');
+      }
+    },
+    { sep: true },
+    {
+      icon: '\u03a3', label: '선택 열 합계',
+      onClick: () => {
+        if (!colReady()) return;
+        const r = window.JJDoc.sumRect();
+        if (!r) return;
+        const txt = r.sum.toLocaleString(undefined, { maximumFractionDigits: 6 });
+        copyText(txt);
+        toast('합계 ' + txt + '  (숫자 ' + r.count + '개' +
+              (r.skipped ? ', 숫자가 아닌 줄 ' + r.skipped + '개는 건너뜀' : '') +
+              ') — 복사했습니다');
+      }
+    }
+  ];
+}
+
+/* ---------------- 열 채우기 ---------------- */
+function colFillDlg() {
+  const n = window.JJDoc.rectLines();
+  const m = $('#menu');
+  m.innerHTML = '';
+
+  const hd = document.createElement('div');
+  hd.className = 'hd abhd';
+  hd.innerHTML = '<span>열 채우기</span><button class="abx" title="닫기 (Esc)">\u2715</button>';
+  hd.querySelector('.abx').addEventListener('click', closePopup);
+  m.appendChild(hd);
+
+  const box = document.createElement('div');
+  box.className = 'coldlg';
+  box.innerHTML =
+    '<div class="colnote">세로로 잡은 <b>' + n + '줄</b> 을 같은 글로 채웁니다.</div>' +
+    '<label class="colf"><span>채울 글</span>' +
+      '<input class="cfText" spellcheck="false" placeholder="예) - 또는 0 또는 TODO"></label>' +
+    '<label class="colchk"><input type="checkbox" class="cfWide">' +
+      '잡은 너비만큼 되풀이해 채우기</label>' +
+    '<div class="btnline">' +
+      '<button class="cfCancel">그만</button>' +
+      '<button class="cfOk prim">채우기</button>' +
+    '</div>';
+  m.appendChild(box);
+
+  const inp = $('.cfText', box);
+  const go = () => {
+    let t = inp.value;
+    if ($('.cfWide', box).checked && t) {
+      const w = colRectWidth();
+      let r = '';
+      while (r.length < w) r += t;
+      t = r.slice(0, w);
+    }
+    const k = window.JJDoc.fillRect(t);
+    closePopup();
+    toast(k + '줄을 채웠습니다');
+  };
+  $('.cfOk', box).addEventListener('click', go);
+  $('.cfCancel', box).addEventListener('click', closePopup);
+  inp.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); go(); }
+  });
+
+  m.classList.remove('hidden');
+  colPlace(m);
+  popupOpen = true;
+  setTimeout(() => inp.focus(), 30);
+}
+
+/** 잡은 네모의 가로 칸 수 */
+function colRectWidth() {
+  const t = window.JJDoc.rectTexts();
+  let w = 0;
+  for (const x of t) if (x.length > w) w = x.length;
+  return Math.max(1, w);
+}
+
+/* ---------------- 숫자 넣기 ---------------- */
+function colNumDlg() {
+  const n = window.JJDoc.rectLines();
+  const m = $('#menu');
+  m.innerHTML = '';
+
+  const hd = document.createElement('div');
+  hd.className = 'hd abhd';
+  hd.innerHTML = '<span>숫자 넣기</span><button class="abx" title="닫기 (Esc)">\u2715</button>';
+  hd.querySelector('.abx').addEventListener('click', closePopup);
+  m.appendChild(hd);
+
+  const box = document.createElement('div');
+  box.className = 'coldlg';
+  box.innerHTML =
+    '<div class="colnote">세로로 잡은 <b>' + n + '줄</b> 에 번호를 매깁니다.</div>' +
+    '<div class="colgrid">' +
+      '<label class="colf"><span>시작</span><input class="cnStart" value="1"></label>' +
+      '<label class="colf"><span>증가</span><input class="cnStep" value="1"></label>' +
+      '<label class="colf"><span>자릿수</span><input class="cnPad" value="0" ' +
+        'title="0 이면 그대로, 3 이면 001 002 …"></label>' +
+    '</div>' +
+    '<div class="colgrid2">' +
+      '<label class="colf"><span>앞에</span><input class="cnPre" spellcheck="false" ' +
+        'placeholder="예) srv-"></label>' +
+      '<label class="colf"><span>뒤에</span><input class="cnSuf" spellcheck="false" ' +
+        'placeholder="예) ,"></label>' +
+    '</div>' +
+    '<label class="colchk"><input type="checkbox" class="cnRight" checked>' +
+      '자릿수를 오른쪽으로 맞추기</label>' +
+    '<div class="colprev"></div>' +
+    '<div class="btnline">' +
+      '<button class="cnCancel">그만</button>' +
+      '<button class="cnOk prim">넣기</button>' +
+    '</div>';
+  m.appendChild(box);
+
+  const opts = () => ({
+    start: parseFloat($('.cnStart', box).value) || 0,
+    step: parseFloat($('.cnStep', box).value) || 0,
+    pad: parseInt($('.cnPad', box).value, 10) || 0,
+    prefix: $('.cnPre', box).value,
+    suffix: $('.cnSuf', box).value,
+    right: $('.cnRight', box).checked
+  });
+
+  /* 넣기 전에 어떤 모습인지 보여 준다 */
+  const prev = $('.colprev', box);
+  const draw = () => {
+    const o = opts();
+    const show = Math.min(n, 4);
+    const out = [];
+    for (let i = 0; i < show; i++) {
+      let v = String(o.start + o.step * i);
+      let neg = '';
+      if (v.charAt(0) === '-') { neg = '-'; v = v.slice(1); }
+      while (o.pad > 0 && v.length < o.pad) v = '0' + v;
+      out.push(o.prefix + neg + v + o.suffix);
+    }
+    prev.textContent = out.join('\n') + (n > show ? '\n…' : '');
+  };
+  box.querySelectorAll('input').forEach((el) => {
+    el.addEventListener('input', draw);
+    el.addEventListener('change', draw);
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); go(); }
+    });
+  });
+  draw();
+
+  const go = () => {
+    const k = window.JJDoc.numberRect(opts());
+    closePopup();
+    toast(k + '줄에 번호를 넣었습니다');
+  };
+  $('.cnOk', box).addEventListener('click', go);
+  $('.cnCancel', box).addEventListener('click', closePopup);
+
+  m.classList.remove('hidden');
+  colPlace(m);
+  popupOpen = true;
+  setTimeout(() => { const i = $('.cnStart', box); i.focus(); i.select(); }, 30);
+}
+
+function colPlace(m) {
+  const r = m.getBoundingClientRect();
+  m.style.left = Math.max(4, Math.round((window.innerWidth - r.width) / 2)) + 'px';
+  m.style.top = '70px';
 }
 
 function bindIconbar() {
@@ -2150,6 +2390,7 @@ function helpItems() {
     { hd: '일반 글(txt) 탭' },
     { icon: '', label: '＋ 탭 → 빈 글 / 텍스트 파일 열기' },
     { icon: '', label: 'Alt+C = 열 편집 모드 켜기/끄기 (또는 Alt+드래그)' },
+    { icon: '', label: '세로로 잡은 뒤 [열] 메뉴 = 채우기 · 숫자 넣기 · 합계' },
     { icon: '', label: '글 칸에서 Ctrl+F 또는 [찾기] 버튼 = 그 글에서 찾기' },
     { icon: '', label: 'Ctrl+Shift+F = 폴더 전체에서 찾기 (파일 내에서 찾기)' },
     { icon: '', label: '열 편집 중 입력·Backspace·Ctrl+C/X/V 가 모두 먹습니다' },
@@ -2261,6 +2502,7 @@ function helpMenuOld() {
     { hd: '일반 글(txt) 탭' },
     { icon: '', label: '＋ 탭 → 빈 글 / 텍스트 파일 열기' },
     { icon: '', label: 'Alt+C = 열 편집 모드 켜기/끄기 (또는 Alt+드래그)' },
+    { icon: '', label: '세로로 잡은 뒤 [열] 메뉴 = 채우기 · 숫자 넣기 · 합계' },
     { icon: '', label: '글 칸에서 Ctrl+F 또는 [찾기] 버튼 = 그 글에서 찾기' },
     { icon: '', label: 'Ctrl+Shift+F = 폴더 전체에서 찾기 (파일 내에서 찾기)' },
     { icon: '', label: '열 편집 중 입력·Backspace·Ctrl+C/X/V 가 모두 먹습니다' },
@@ -3430,6 +3672,7 @@ const MENUS = [
       { icon: '▾', label: '다음 할 항목으로', onClick: () => $('#btnNext').click() }
     ]
   },
+  { name: '열', items: () => colItems() },
   {
     name: '보기',
     items: () => [

@@ -826,6 +826,85 @@
       rectReplace(parts.length === n ? parts : String(t).replace(/\r?\n/g, ' '));
       return true;
     },
+    /** 네모를 코드로 잡는다 (줄·칸 모두 0 부터) */
+    setRect: function (r) {
+      if (!ta || !r) return false;
+      rect = { l1: r.l1 | 0, c1: r.c1 | 0, l2: r.l2 | 0, c2: r.c2 | 0 };
+      setColMode(true, true);
+      drawRect();
+      return true;
+    },
+    /** 잡아 둔 네모를 푼다 */
+    clearRect: function () { clearRect(); },
+    /** 네모 안을 같은 글로 채운다 (줄마다 똑같이) */
+    fillRect: function (t) {
+      if (!rect) return 0;
+      const r = norm();
+      snapshot();
+      rectReplace(String(t == null ? '' : t));
+      return r.l2 - r.l1 + 1;
+    },
+    /** 네모를 지운다 */
+    deleteRect: function () {
+      if (!rect) return 0;
+      const r = norm();
+      snapshot();
+      rectReplace('');
+      return r.l2 - r.l1 + 1;
+    },
+    /** 네모가 걸친 줄 수 */
+    rectLines: function () {
+      if (!rect) return 0;
+      const r = norm();
+      return r.l2 - r.l1 + 1;
+    },
+    /**
+     * 네모 자리에 번호를 매겨 넣는다.
+     *   start 시작값 · step 증가값 · pad 자릿수(0 이면 안 채움)
+     *   prefix/suffix 앞뒤에 붙일 글 · right 오른쪽 맞춤
+     */
+    numberRect: function (o) {
+      if (!rect) return 0;
+      const r = norm();
+      const n = r.l2 - r.l1 + 1;
+      const start = Number(o && o.start != null ? o.start : 1);
+      const step = Number(o && o.step != null ? o.step : 1);
+      const pad = Math.max(0, Math.min(12, Number((o && o.pad) || 0)));
+      const pre = String((o && o.prefix) || '');
+      const suf = String((o && o.suffix) || '');
+      const right = !!(o && o.right);
+
+      const body = [];
+      for (let i = 0; i < n; i++) {
+        let v = String(start + step * i);
+        let neg = '';
+        if (v.charAt(0) === '-') { neg = '-'; v = v.slice(1); }
+        if (pad > 0) while (v.length < pad) v = '0' + v;
+        body.push(neg + v);
+      }
+      let wide = 0;
+      for (const b of body) if (b.length > wide) wide = b.length;
+
+      const out = body.map((b) => {
+        const t = right ? ' '.repeat(wide - b.length) + b : b;
+        return pre + t + suf;
+      });
+      snapshot();
+      rectReplace(out);
+      return n;
+    },
+    /** 네모 안의 숫자를 더한다 */
+    sumRect: function () {
+      if (!rect) return null;
+      const t = rectTexts();
+      let sum = 0, cnt = 0, skip = 0;
+      for (const line of t) {
+        // 1,234  -56  3.14  처럼 적힌 것을 숫자로 본다
+        const m = String(line).replace(/,/g, '').match(/-?\d+(\.\d+)?/);
+        if (m) { sum += parseFloat(m[0]); cnt++; } else if (String(line).trim() !== '') skip++;
+      }
+      return { sum: sum, count: cnt, skipped: skip, lines: t.length };
+    },
     /** 글꼴이 바뀌었을 때 글자 크기를 다시 잰다 */
     remeasure: function () { resetMetrics(); drawRect(); drawHighlights(); },
     /** 지금 붙어 있는 글 칸 */
