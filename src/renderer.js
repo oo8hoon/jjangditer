@@ -1782,30 +1782,44 @@ function openAbout() {
   box.className = 'aboutbox';
   box.innerHTML =
     '<div class="abtop">' +
-      '<div class="abname">짱디터 <span class="abver">v' + esc(cfg.version || '') + '</span></div>' +
+      '<div class="abname">짱디터</div>' +
       '<div class="absub">JJangditer — 서버 작업용 사이드 에디터</div>' +
-      '<div class="abby">만든이 <b>짱스 (JJangs)</b></div>' +
+      '<div class="abmeta">' +
+        '<span class="abver">v' + esc(cfg.version || '') + '</span>' +
+        '<span class="abby">만든이 <b>짱스 (JJangs)</b></span>' +
+      '</div>' +
     '</div>' +
 
     '<div class="abfree">' +
-      '<b>라이선스 없이 자유롭게 쓰셔도 됩니다.</b><br>' +
-      'MIT License — 비용·구매·등록 절차가 없습니다.<br>' +
-      '사내 배포와 수정도 자유롭습니다. (무보증 / as-is)' +
+      '<b>라이선스 없이 자유롭게 쓰셔도 됩니다.</b>' +
+      '<div>MIT License — 비용·구매·등록 절차가 없습니다.</div>' +
+      '<div>사내 배포와 수정도 자유롭습니다. <i>(무보증 / as-is)</i></div>' +
     '</div>' +
 
-    '<div class="abrow"><span>설치</span><b>필요 없음</b> — exe 하나로 실행</div>' +
-    '<div class="abrow"><span>권한</span>관리자 권한 불필요 · 레지스트리 미사용</div>' +
-    '<div class="abrow"><span>구성</span>Edge WebView2 · .NET Framework 4.8 (윈도우 기본)</div>' +
-    '<div class="abrow"><span>통신</span><b>밖으로 보내는 정보 없음</b><br>' +
-      '업데이트 확인 때만 GitHub 에서 받아오기만 합니다</div>' +
-    '<div class="abrow"><span>저장</span>' + esc(cfg.dataDir || '%APPDATA%\\JJangditer') + '</div>' +
+    '<div class="abrow"><span>설치</span><div><b>필요 없음</b> — exe 하나로 실행</div></div>' +
+    '<div class="abrow"><span>권한</span><div>관리자 권한 불필요 · 레지스트리 미사용</div></div>' +
+    '<div class="abrow"><span>구성</span><div>Edge WebView2 · .NET Framework 4.8' +
+      '<br><em>둘 다 윈도우 기본 구성요소</em></div></div>' +
+    '<div class="abrow"><span>통신</span><div><b>밖으로 보내는 정보 없음</b>' +
+      '<br><em>업데이트 확인 때만 GitHub 에서 받아오기만 합니다</em></div></div>' +
+    '<div class="abrow"><span>저장</span><div class="abpath">' +
+      esc(cfg.dataDir || '%APPDATA%\\JJangditer') + '</div></div>' +
 
     '<div class="btnline">' +
+      '<button class="abupd prim wide">\u27f3  업데이트 확인</button>' +
+    '</div>' +
+    '<div class="btnline three">' +
       '<button class="abrepo">소스 저장소</button>' +
-      '<button class="ablic">라이선스 전문</button>' +
-      '<button class="abcopy prim">정보 복사</button>' +
+      '<button class="ablic">라이선스</button>' +
+      '<button class="abcopy">정보 복사</button>' +
     '</div>';
   m.appendChild(box);
+
+  $('.abupd', box).addEventListener('click', () => {
+    closePopup();
+    toast('업데이트 확인 중…');
+    window.jj.checkUpdate();
+  });
 
   $('.abrepo', box).addEventListener('click', () => {
     window.jj.openUrl(REPO_URL);
