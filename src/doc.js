@@ -183,17 +183,20 @@
       const m = metrics();
       const r = norm();
       const lines = ta.value.split('\n');
-      // 가로 폭이 0 이면 '열 캐럿' — 깜빡이는 세로줄로 보여 준다
+      /* 열 선택은 '세로로 이어진 한 덩어리' 다.
+         줄마다 따로 상자를 그리면 테두리가 줄마다 생겨 칸처럼 끊겨 보이므로,
+         위에서 아래까지 하나의 띠로 그린다.
+         가로 폭이 0 이면 깜빡이는 열 캐럿. */
       const caret = r.c1 === r.c2;
-      for (let l = r.l1; l <= r.l2 && l < lines.length; l++) {
-        const d = document.createElement('div');
-        d.className = caret ? 'csl ccaret' : 'csl';
-        d.style.left = (m.padL + r.c1 * m.cw - ta.scrollLeft) + 'px';
-        d.style.top = (m.padT + l * m.lh - ta.scrollTop) + 'px';
-        d.style.width = (caret ? 2 : (r.c2 - r.c1) * m.cw) + 'px';
-        d.style.height = m.lh + 'px';
-        selBox.appendChild(d);
-      }
+      const last = Math.min(r.l2, Math.max(0, lines.length - 1));
+      const rows = Math.max(1, last - r.l1 + 1);
+      const d = document.createElement('div');
+      d.className = caret ? 'csl ccaret' : 'csl';
+      d.style.left = (m.padL + r.c1 * m.cw - ta.scrollLeft) + 'px';
+      d.style.top = (m.padT + r.l1 * m.lh - ta.scrollTop) + 'px';
+      d.style.width = (caret ? 2 : (r.c2 - r.c1) * m.cw) + 'px';
+      d.style.height = (rows * m.lh) + 'px';
+      selBox.appendChild(d);
     }
     // 잡은 게 있을 때만 본래 커서를 숨긴다 (열 모드라도 안 잡았으면 그냥 타자)
     if (root) root.classList.toggle('hasrect', !!rect);
@@ -250,6 +253,47 @@
     else if (x + m.cw > ta.scrollLeft + ta.clientWidth) {
       ta.scrollLeft = x + m.cw - ta.clientWidth + m.cw * 2;
     }
+  }
+
+
+  /**
+   * 보통 방식으로 고른 글(마우스로 주르륵 끈 것)을 열 선택으로 바꾼다.
+   * 열 편집을 켜는 순간 부르면, 고른 자리를 그대로 이어받는다.
+   */
+  function selectionToRect() {
+    if (!ta) return false;
+    const a = ta.selectionStart, b = ta.selectionEnd;
+    if (a === b) return false;
+
+    const lines = ta.value.split('\n');
+    const posOf = (idx) => {
+      const pre = ta.value.slice(0, idx);
+      return {
+        line: pre.split('\n').length - 1,
+        col: endCol(pre.slice(pre.lastIndexOf('\n') + 1))
+      };
+    };
+    const p1 = posOf(a);
+    let p2 = posOf(b);
+
+    // 줄 맨 앞에서 끝난 선택은 그 앞 줄까지 고른 것으로 본다
+    if (p2.col === 0 && p2.line > p1.line) {
+      p2 = { line: p2.line - 1, col: endCol(lines[p2.line - 1] == null ? '' : lines[p2.line - 1]) };
+    }
+
+    let c1 = p1.col, c2 = p2.col;
+    if (p1.line !== p2.line && c1 === c2) {
+      // 여러 줄을 통째로 고른 경우 — 그 줄들을 왼쪽 끝부터 가장 긴 줄 끝까지 잡는다
+      c1 = 0;
+      c2 = 0;
+      for (let l = Math.min(p1.line, p2.line); l <= Math.max(p1.line, p2.line); l++) {
+        const e = endCol(lines[l] == null ? '' : lines[l]);
+        if (e > c2) c2 = e;
+      }
+    }
+
+    rect = { l1: p1.line, c1: c1, l2: p2.line, c2: c2 };
+    return true;
   }
 
   function posFromEvent(e) {
@@ -314,12 +358,23 @@
     toast(t.length + '줄을 복사했습니다');
   }
 
-  function setColMode(on, quiet) {
+  function setColMode(on, quiet, keep) {
     colMode = !!on;
+    let took = false;
+    if (colMode && !keep) {            // keep = 이미 잡아 둔 게 있으니 건드리지 말 것
+      // 마우스로 이미 골라 둔 게 있으면 그대로 열 선택으로 넘겨받는다
+      took = selectionToRect();
+      if (took) { caretToRectStart(); drawRect(); }
+    }
     if (!colMode) clearRect();
     if (root) root.classList.toggle('colmode', colMode);
     updateStatus();
-    if (!quiet) toast(colMode ? '열 편집 모드 — 드래그하면 세로로 잡힙니다 (Alt+C 로 해제)' : '열 편집 모드 해제');
+    if (!quiet) {
+      toast(colMode
+        ? (took ? '열 편집 모드 — 고른 자리를 그대로 넘겨받았습니다 (Alt+C 로 해제)'
+                : '열 편집 모드 — 드래그하면 세로로 잡힙니다 (Alt+C 로 해제)')
+        : '열 편집 모드 해제');
+    }
   }
 
   /* ---------- 찾기 ---------- */
@@ -752,7 +807,7 @@
         const line = before.split('\n').length - 1;
         const col = endCol(before.slice(before.lastIndexOf('\n') + 1));
         rect = { l1: line, c1: col, l2: line, c2: col };
-        if (!colMode) setColMode(true, true);
+        if (!colMode) setColMode(true, true, true);
         rectKeyMove(e.key, true, false);
         return;
       }
@@ -904,7 +959,7 @@
     setRect: function (r) {
       if (!ta || !r) return false;
       rect = { l1: r.l1 | 0, c1: r.c1 | 0, l2: r.l2 | 0, c2: r.c2 | 0 };
-      setColMode(true, true);
+      setColMode(true, true, true);
       drawRect();
       return true;
     },
