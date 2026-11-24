@@ -1324,3 +1324,21 @@ body.pastend .row textarea[data-fixedh="1"] {
   background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600;
 }
 .coldlg .btnline button.prim:hover { filter: brightness(1.1); color: #fff; }
+
+
+/* ================= 열 편집 중의 커서 =================
+   열 편집 중에는 짱디터가 그린 세로줄이 커서 노릇을 한다.
+   글 칸이 가진 본래 커서까지 같이 보이면 커서가 둘로 보여 헷갈리므로 숨긴다.   */
+.row .docwrap.colmode.hasrect textarea,
+#zoom.colmode.hasrect textarea.doctext {
+  caret-color: transparent;
+}
+
+/* 폭이 0 이면 커서처럼 깜빡인다 */
+.row .docwrap .csl.ccaret,
+#zoom .colsel .csl.ccaret {
+  background: var(--accent);
+  outline: 0;
+  animation: ccaret 1.06s step-end infinite;
+}
+@keyframes ccaret { 50% { opacity: 0; } }

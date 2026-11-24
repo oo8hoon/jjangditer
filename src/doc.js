@@ -183,17 +183,73 @@
       const m = metrics();
       const r = norm();
       const lines = ta.value.split('\n');
+      // 가로 폭이 0 이면 '열 캐럿' — 깜빡이는 세로줄로 보여 준다
+      const caret = r.c1 === r.c2;
       for (let l = r.l1; l <= r.l2 && l < lines.length; l++) {
         const d = document.createElement('div');
-        d.className = 'csl';
+        d.className = caret ? 'csl ccaret' : 'csl';
         d.style.left = (m.padL + r.c1 * m.cw - ta.scrollLeft) + 'px';
         d.style.top = (m.padT + l * m.lh - ta.scrollTop) + 'px';
-        d.style.width = Math.max(2, (r.c2 - r.c1) * m.cw) + 'px';
+        d.style.width = (caret ? 2 : (r.c2 - r.c1) * m.cw) + 'px';
         d.style.height = m.lh + 'px';
         selBox.appendChild(d);
       }
     }
+    // 잡은 게 있을 때만 본래 커서를 숨긴다 (열 모드라도 안 잡았으면 그냥 타자)
+    if (root) root.classList.toggle('hasrect', !!rect);
     updateStatus();
+  }
+
+
+  /**
+   * 열 편집 중에 키보드로 자리를 옮긴다.
+   * shift 를 누르고 있으면 잡은 자리를 넓히고, 아니면 그 자리로 옮기기만 한다.
+   * (울트라에디트와 같은 방식)
+   */
+  function rectKeyMove(key, shift, ctrl) {
+    if (!rect) return false;
+    const lines = ta.value.split('\n');
+    let l = rect.l2, c = rect.c2;
+
+    if (key === 'ArrowUp')         l = Math.max(0, l - 1);
+    else if (key === 'ArrowDown')  l = Math.min(lines.length - 1, l + 1);
+    else if (key === 'ArrowLeft')  c = Math.max(0, c - 1);
+    else if (key === 'ArrowRight') c = c + 1;
+    else if (key === 'Home')       c = ctrl ? 0 : firstCol(lines[l] == null ? '' : lines[l]);
+    else if (key === 'End')        c = endCol(lines[l] == null ? '' : lines[l]);
+    else if (key === 'PageUp')     l = Math.max(0, l - 10);
+    else if (key === 'PageDown')   l = Math.min(lines.length - 1, l + 10);
+    else return false;
+
+    rect.l2 = l;
+    rect.c2 = c;
+    if (!shift) { rect.l1 = l; rect.c1 = c; }   // 그냥 옮기기
+    caretToRectStart();
+    scrollRectIntoView();
+    drawRect();
+    return true;
+  }
+
+  /** 들여쓴 줄에서 Home 은 글자가 시작되는 칸으로 (한 번 더 누르면 0 칸) */
+  function firstCol(line) {
+    const m = line.match(/^[ \t]*/);
+    const lead = m ? m[0] : '';
+    const col = endCol(lead);
+    return col;
+  }
+
+  /** 옮긴 자리가 화면 밖이면 따라가서 보여 준다 */
+  function scrollRectIntoView() {
+    if (!rect || !ta) return;
+    const m = metrics();
+    const y = m.padT + rect.l2 * m.lh;
+    if (y < ta.scrollTop) ta.scrollTop = y;
+    else if (y + m.lh > ta.scrollTop + ta.clientHeight) ta.scrollTop = y + m.lh - ta.clientHeight;
+    const x = m.padL + rect.c2 * m.cw;
+    if (x < ta.scrollLeft) ta.scrollLeft = Math.max(0, x - m.cw * 4);
+    else if (x + m.cw > ta.scrollLeft + ta.clientWidth) {
+      ta.scrollLeft = x + m.cw - ta.clientWidth + m.cw * 2;
+    }
   }
 
   function posFromEvent(e) {
@@ -688,6 +744,19 @@
       // Alt 와 함께 누른 글자는 편집 내용에 들어가지 않게 막는다
       if (e.altKey && !ctrl && e.key && e.key.length === 1) { e.preventDefault(); return; }
 
+      // 열 편집 중이 아니어도 Alt+Shift+화살표면 그 자리에서 열 선택을 시작한다
+      if (!rect && e.altKey && e.shiftKey && e.key.indexOf('Arrow') === 0) {
+        e.preventDefault();
+        const idx = ta.selectionStart;
+        const before = ta.value.slice(0, idx);
+        const line = before.split('\n').length - 1;
+        const col = endCol(before.slice(before.lastIndexOf('\n') + 1));
+        rect = { l1: line, c1: col, l2: line, c2: col };
+        if (!colMode) setColMode(true, true);
+        rectKeyMove(e.key, true, false);
+        return;
+      }
+
       if (!rect) {
         if (e.key === 'Tab') {
           e.preventDefault();
@@ -722,7 +791,12 @@
         return;
       }
       if (e.key.length === 1) { e.preventDefault(); snapshot(); rectReplace(e.key); return; }
-      if (e.key.indexOf('Arrow') === 0 || e.key === 'Home' || e.key === 'End') clearRect();
+
+      // 화살표·Home·End·PageUp/Down : 선택을 풀지 않고 키보드로 고른다
+      if (e.key.indexOf('Arrow') === 0 || e.key === 'Home' || e.key === 'End' ||
+          e.key === 'PageUp' || e.key === 'PageDown') {
+        if (rectKeyMove(e.key, e.shiftKey, ctrl)) e.preventDefault();
+      }
     });
 
     ta.addEventListener('paste', (e) => {
