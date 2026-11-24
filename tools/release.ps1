@@ -139,8 +139,15 @@ $Tag = "v$Version"
 # ──────────────────────────────────────────────────────────── 2~3) 빌드 + 묶음
 if (-not $ReleaseOnly) {
     Step 2 '빌드'
-    Get-Process | Where-Object { $_.ProcessName -like '*디터*' -or $_.ProcessName -like 'JJangditer*' } |
-        Stop-Process -Force -ErrorAction SilentlyContinue
+    # dist 를 정리하려면 쓰고 있는 짱디터를 잠깐 닫아야 한다.
+    # 닫았다는 것을 적어 두었다가, 배포가 끝나면 새 버전으로 다시 띄운다.
+    $running = @(Get-Process |
+        Where-Object { $_.ProcessName -like '*디터*' -or $_.ProcessName -like 'JJangditer*' })
+    $WasRunning = $running.Count -gt 0
+    if ($WasRunning) {
+        $running | Stop-Process -Force -ErrorAction SilentlyContinue
+        Warn ('쓰고 있던 짱디터 {0}개를 잠깐 닫습니다 (배포 뒤 다시 띄웁니다)' -f $running.Count)
+    }
     Start-Sleep -Milliseconds 800
     node tools/build.js | Out-Null
     if ($LASTEXITCODE -ne 0) { Die '빌드 실패' }
@@ -277,4 +284,13 @@ Write-Host "══════════════════════�
 Write-Host "  릴리스 : $($rel.html_url)"
 Write-Host "  직원용 : https://github.com/$Owner/$Repo/releases/latest"
 Write-Host "  업데이트는 6시간 안에 자동으로 안내됩니다."
+
+# 닫았던 짱디터를 새 버전으로 다시 띄워 준다
+if ($WasRunning) {
+    $newExe = Join-Path $Root ("dist\짱디터-{0}.exe" -f $Version)
+    if (Test-Path $newExe) {
+        Start-Process -FilePath $newExe | Out-Null
+        Write-Host "  짱디터를 $Version 으로 다시 띄웠습니다." -ForegroundColor Green
+    }
+}
 Write-Host ""

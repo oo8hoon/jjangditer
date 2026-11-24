@@ -1769,13 +1769,65 @@ function aboutText() {
   ].join('\n');
 }
 
+
+/**
+ * 정보 창 안에 한 줄 알려 준다. 창이 닫혀 있으면 아무 일도 하지 않는다.
+ * kind : wait(확인 중) / ok(최신) / new(새 버전) / bad(실패)
+ */
+/** 정보 창이 지금 화면에 보이는가 (닫아도 내용은 그대로 남아 있다) */
+function aboutOpen() {
+  const m = document.querySelector('#menu');
+  return !!(m && !m.classList.contains('hidden') && m.querySelector('.aboutbox'));
+}
+
+function abSay(kind, html) {
+  if (!aboutOpen()) return false;
+  const el = document.querySelector('.aboutbox .abstat');
+  if (!el) return false;
+  el.className = 'abstat ' + kind;
+  el.innerHTML = html;
+  return true;
+}
+
+/** 업데이트 소식이 오면 정보 창에도 알려 준다 */
+function aboutOnUpdate(kind, d) {
+  if (!aboutOpen()) return;
+  const now = esc(cfg.version || '');
+
+  if (kind === 'none') {
+    abSay('ok', '<b>\u2713 최신 버전을 쓰고 계십니다</b><em>v' + now + '</em>');
+  } else if (kind === 'available') {
+    abSay('new',
+      '<b>\u2191 새 버전 v' + esc(d.version) + ' 이 있습니다</b>' +
+      '<em>지금 v' + now + '</em>' +
+      (d.notes ? '<div class="abnote">' + esc(d.notes) + '</div>' : '') +
+      '<button class="abgo">지금 업데이트</button>');
+    const go = document.querySelector('.aboutbox .abgo');
+    if (go) {
+      go.addEventListener('click', () => {
+        go.disabled = true;
+        go.textContent = '내려받는 중…';
+        window.jj.applyUpdate();
+      });
+    }
+  } else if (kind === 'progress') {
+    const go = document.querySelector('.aboutbox .abgo');
+    if (go && d && d.percent != null) go.textContent = '내려받는 중… ' + d.percent + '%';
+  } else if (kind === 'error') {
+    abSay('bad', '<b>\u26a0 확인하지 못했습니다</b><em>지금 v' + now + '</em>' +
+      '<div class="abnote">' + esc((d && d.message) || '잠시 뒤에 다시 해 보세요') + '</div>');
+  }
+}
+
 function openAbout() {
   const m = $('#menu');
   m.innerHTML = '';
 
   const hd = document.createElement('div');
-  hd.className = 'hd';
-  hd.textContent = '짱디터 정보';
+  hd.className = 'hd abhd';
+  hd.innerHTML = '<span>짱디터 정보</span>' +
+    '<button class="abx" title="닫기 (Esc)">\u2715</button>';
+  hd.querySelector('.abx').addEventListener('click', closePopup);
   m.appendChild(hd);
 
   const box = document.createElement('div');
@@ -1808,6 +1860,7 @@ function openAbout() {
     '<div class="btnline">' +
       '<button class="abupd prim wide">\u27f3  업데이트 확인</button>' +
     '</div>' +
+    '<div class="abstat hidden"></div>' +
     '<div class="btnline three">' +
       '<button class="abrepo">소스 저장소</button>' +
       '<button class="ablic">라이선스</button>' +
@@ -1816,8 +1869,8 @@ function openAbout() {
   m.appendChild(box);
 
   $('.abupd', box).addEventListener('click', () => {
-    closePopup();
-    toast('업데이트 확인 중…');
+    // 창을 닫지 않는다. 결과를 이 창 안에서 보여 준다.
+    abSay('wait', '<span class="abspin">\u27f3</span> 최신 버전을 확인하는 중…');
     window.jj.checkUpdate();
   });
 
@@ -1832,8 +1885,7 @@ function openAbout() {
   });
   $('.abcopy', box).addEventListener('click', () => {
     copyText(aboutText());
-    closePopup();
-    toast('정보를 복사했습니다 — 보안 점검 답변에 붙여 쓰세요');
+    abSay('ok', '\u2713 정보를 복사했습니다 — 보안 점검 답변에 붙여 쓰세요');
   });
 
   m.classList.remove('hidden');
@@ -3019,6 +3071,7 @@ function bindUpdates() {
   });
 
   window.jj.onUpdate((kind, d) => {
+    aboutOnUpdate(kind, d);          // 정보 창이 열려 있으면 거기에도 알려 준다
     if (kind === 'available') {
       pendingUpdate = d;
       txt.textContent = '새 버전 ' + d.version + ' 이 있습니다' + (d.notes ? ' — ' + d.notes : '');
@@ -3028,9 +3081,9 @@ function bindUpdates() {
     } else if (kind === 'progress') {
       if (d && d.percent != null) txt.textContent = '내려받는 중… ' + d.percent + '%';
     } else if (kind === 'none') {
-      toast('이미 최신 버전입니다 (v' + d.version + ')');
+      if (!aboutOpen()) toast('이미 최신 버전입니다 (v' + d.version + ')');
     } else if (kind === 'error') {
-      toast(d.message || '업데이트 확인 실패');
+      if (!aboutOpen()) toast(d.message || '업데이트 확인 실패');
     }
   });
 }
