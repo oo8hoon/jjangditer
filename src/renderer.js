@@ -94,6 +94,7 @@ function defaultUi() {
   // mode: 'work' = 작업 화면(값 채우고 복사), 'edit' = 설정 화면(틀을 고침)
   return { showCurrent: true, showKey: 'auto', filterUndone: false, mode: 'work',
            mono: 'gulim', monoSize: 13, monoLh: 1.45,
+           iconbar: null,                    // null = 기본 차례
            // 글 끝에서 멈추지 않고 더 내려갈 수 있게 (울트라에디트와 같은 방식)
            pastEnd: true };
 }
@@ -114,6 +115,13 @@ function normWs(w) {
   if (!w || !Array.isArray(w.tabs) || !w.tabs.length) return defaultWs();
   const tabs = w.tabs.map(normTab);
   const ui = Object.assign(defaultUi(), w.ui || {});
+  // 아이콘 줄 : 모르는 아이디는 걸러 낸다 (예전 설정이나 사라진 기능)
+  if (Array.isArray(ui.iconbar)) {
+    ui.iconbar = ui.iconbar.filter((id) => id === '|' || icById(id));
+    if (!ui.iconbar.length) ui.iconbar = null;
+  } else {
+    ui.iconbar = null;
+  }
   const activeTabId = tabs.some((t) => t.id === w.activeTabId) ? w.activeTabId : tabs[0].id;
   const recent = Array.isArray(w.recent) ? w.recent.slice(0, 12) : [];
 
@@ -517,6 +525,7 @@ function applyMode() {
 
 function render() {
   applyMode();
+  renderIconbar();
   renderTabs();
   renderRows();
   renderProgress();
@@ -1538,42 +1547,259 @@ function bindFindDlg() {
 }
 
 /** 메뉴 밑 아이콘 줄 — 자주 쓰는 것만 */
+
+/* ================= 아이콘 줄 =================
+   어떤 아이콘을 어느 자리에 둘지 사용자가 고른다.
+   ws.ui.iconbar 에 아이디를 늘어놓은 차례가 곧 화면 차례다. '|' 는 구분선.   */
+
+const IC_ALL = [
+  { id: 'open',   ic: '\ud83d\udcc2', label: '파일 열기',     title: '텍스트 파일 열기 (Ctrl+O)',
+    run: () => openTextFile() },
+  { id: 'save',   ic: '\ud83d\udcbe', label: '저장',          title: '파일 저장 (Ctrl+S)',
+    run: () => saveCurrentFile(false) },
+  { id: 'saveas', ic: '\ud83d\udcdd', label: '다른 이름으로', title: '다른 이름으로 저장 (Ctrl+Shift+S)',
+    run: () => saveCurrentFile(true) },
+  { id: 'find',   ic: '\ud83d\udd0e', label: '찾기',          title: '이 글에서 찾기 (Ctrl+F)',
+    run: () => openFindDlg('find') },
+  { id: 'repl',   ic: '\ud83d\udd01', label: '바꾸기',        title: '바꾸기 (Ctrl+H)',
+    run: () => openFindDlg('repl') },
+  { id: 'fif',    ic: '\ud83d\udcc1', label: '파일에서 찾기', title: '파일 내에서 찾기 (Ctrl+Shift+F)',
+    run: () => openFindInFiles(window.innerWidth - 24, 60) },
+  { id: 'undo',   ic: '\u21a9', label: '되돌리기',   title: '되돌리기 (Ctrl+Z)',
+    run: () => icDoc((d) => d.undo()) },
+  { id: 'redo',   ic: '\u21aa', label: '다시 하기',  title: '다시 하기 (Ctrl+Y)',
+    run: () => icDoc((d) => d.redo()) },
+  { id: 'col',    ic: '\u25a5', label: '열 편집',    title: '열 편집 켜기 / 끄기 (Alt+C)',
+    run: () => {
+      const row = findTargetRow();
+      if (row) toggleColHere(row.id, fieldOf(row)); else toast('열 편집할 글이 없습니다');
+    } },
+  { id: 'fit',    ic: '\u2922', label: '높이 맞춤',  title: '글 칸을 패널 높이에 맞추기',
+    run: () => {
+      const row = findTargetRow();
+      if (!row) { toast('글이 없습니다'); return; }
+      row.fit = !row.fit;
+      if (row.fit) row.height = null;
+      rerender(); scheduleSave();
+    } },
+  { id: 'copy',   ic: '\u29c9', label: '전체 복사',  title: '이 글 전체 복사',
+    run: () => {
+      const row = findTargetRow();
+      if (row) copyText(resolve(row[fieldOf(row)], varsOf(activeTab())));
+      else toast('복사할 글이 없습니다');
+    } },
+  { id: 'newtab', ic: '\uff0b', label: '새 탭',      title: '새 탭',
+    run: () => addTabMenu(60, 80) },
+
+  /* --- 여기부터는 원하면 넣어 쓰는 것들 --- */
+  { id: 'theme',  label: '다크 / 라이트',
+    ic: () => (cfg.theme === 'dark' ? '\u2600' : '\ud83c\udf19'),
+    title: () => (cfg.theme === 'dark' ? '라이트 모드로 바꾸기' : '다크 모드로 바꾸기'),
+    run: () => window.jj.setPrefs({ theme: cfg.theme === 'dark' ? 'light' : 'dark' }) },
+  { id: 'pin',    label: '패널 고정',
+    ic: () => (cfg.pinned ? '\ud83d\udccc' : '\ud83d\udccd'),
+    title: () => (cfg.pinned ? '고정 해제 (자동 숨김)' : '우측에 고정'),
+    run: () => window.jj.setPinned(!cfg.pinned) },
+  { id: 'mode',   label: '작업 / 설정 화면',
+    ic: () => (ws.ui.mode === 'edit' ? '\u2713' : '\u2699'),
+    title: () => (ws.ui.mode === 'edit' ? '작업 화면으로 (Ctrl+D)' : '설정 화면으로 (Ctrl+D)'),
+    run: () => { const b = $('#btnMode'); if (b) b.click(); } },
+  { id: 'export', ic: '\ud83d\udce4', label: '탭 내보내기', title: '현재 탭 내보내기 (Ctrl+E)',
+    run: () => exportTab(ws.activeTabId) },
+  { id: 'update', ic: '\u27f3', label: '업데이트 확인', title: '업데이트 확인',
+    run: () => { toast('업데이트 확인 중…'); window.jj.checkUpdate(); } },
+  { id: 'about',  ic: '\u24d8', label: '짱디터 정보', title: '짱디터 정보',
+    run: () => openAbout() },
+  { id: 'icset',  ic: '\u22ef', label: '아이콘 편집', title: '이 줄에 둘 아이콘 고르기',
+    run: () => iconbarSettings() }
+];
+
+const IC_DEFAULT = ['open', 'save', 'saveas', '|', 'find', 'repl', 'fif', '|',
+                    'undo', 'redo', '|', 'col', 'fit', 'copy', '|', 'theme', 'newtab'];
+
+function icById(id) { return IC_ALL.find((x) => x.id === id) || null; }
+
+/** 되돌리기·다시하기처럼 글 칸을 먼저 붙잡아야 하는 것들 */
+function icDoc(fn) {
+  const row = findTargetRow();
+  const ta = row ? taOf(row.id, fieldOf(row)) : null;
+  if (ta) { ta.focus(); bindDocTo(ta); }
+  fn(window.JJDoc);
+}
+
+/** 설정에 적힌 차례대로 아이콘 줄을 그린다 */
+function renderIconbar() {
+  const bar = $('#iconbar');
+  if (!bar || !ws) return;          // 작업 내용을 읽기 전에는 그리지 않는다
+  const list = (ws.ui.iconbar && ws.ui.iconbar.length) ? ws.ui.iconbar : IC_DEFAULT;
+  let h = '';
+  for (let i = 0; i < list.length; i++) {
+    const id = list[i];
+    if (id === '|') { h += '<span class="sep"></span>'; continue; }
+    const it = icById(id);
+    if (!it) continue;
+    const ic = typeof it.ic === 'function' ? it.ic() : it.ic;
+    const ti = typeof it.title === 'function' ? it.title() : it.title;
+    h += '<button data-ic="' + id + '" data-at="' + i + '" draggable="true" title="' +
+         esc(ti) + '">' + esc(ic) + '</button>';
+  }
+  bar.innerHTML = h;
+  updateSaveIcon();
+}
+
+/* ---------------- 아이콘 고르기 ---------------- */
+
+/** 지금 쓰는 차례 (설정이 없으면 기본값) */
+function icList() {
+  if (!ws) return IC_DEFAULT.slice();
+  return (ws.ui.iconbar && ws.ui.iconbar.length) ? ws.ui.iconbar.slice() : IC_DEFAULT.slice();
+}
+
+function icSave(list) {
+  ws.ui.iconbar = list;
+  renderIconbar();
+  saveNow();
+}
+
+/** 아이콘 줄 꾸미기 창 */
+function iconbarSettings() {
+  const m = $('#menu');
+  m.innerHTML = '';
+
+  const hd = document.createElement('div');
+  hd.className = 'hd abhd';
+  hd.innerHTML = '<span>아이콘 줄 꾸미기</span><button class="abx" title="닫기 (Esc)">\u2715</button>';
+  hd.querySelector('.abx').addEventListener('click', closePopup);
+  m.appendChild(hd);
+
+  const box = document.createElement('div');
+  box.className = 'icset';
+  m.appendChild(box);
+
+  const draw = () => {
+    const list = icList();
+    const used = {};
+    for (const id of list) used[id] = true;
+
+    let h = '<div class="icnote">쓰는 아이콘 — 화살표로 자리를 옮기고, ✕ 로 뺍니다.<br>' +
+            '아이콘 줄에서 바로 끌어다 옮길 수도 있습니다.</div><div class="icnow">';
+    for (let i = 0; i < list.length; i++) {
+      const id = list[i];
+      const it = id === '|' ? null : icById(id);
+      if (id !== '|' && !it) continue;
+      const ic = it ? (typeof it.ic === 'function' ? it.ic() : it.ic) : '\u2502';
+      const nm = it ? it.label : '구분선';
+      h += '<div class="icrow" data-at="' + i + '">' +
+             '<span class="icic">' + esc(ic) + '</span>' +
+             '<span class="icnm">' + esc(nm) + '</span>' +
+             '<button class="icup" title="위로"' + (i === 0 ? ' disabled' : '') + '>\u25b2</button>' +
+             '<button class="icdn" title="아래로"' + (i === list.length - 1 ? ' disabled' : '') + '>\u25bc</button>' +
+             '<button class="icdel" title="빼기">\u2715</button>' +
+           '</div>';
+    }
+    h += '</div>';
+
+    const rest = IC_ALL.filter((x) => !used[x.id]);
+    h += '<div class="icnote2">넣을 수 있는 것 — 눌러서 맨 뒤에 넣습니다</div><div class="icpool">';
+    for (const it of rest) {
+      const ic = typeof it.ic === 'function' ? it.ic() : it.ic;
+      h += '<button class="icadd" data-id="' + it.id + '" title="' + esc(it.label) + '">' +
+             esc(ic) + '<em>' + esc(it.label) + '</em></button>';
+    }
+    h += '<button class="icadd" data-id="|" title="구분선 넣기">\u2502<em>구분선</em></button>';
+    h += '</div>';
+
+    h += '<div class="btnline"><button class="icreset">기본값으로</button>' +
+         '<button class="icdone prim">다 했습니다</button></div>';
+    box.innerHTML = h;
+
+    box.querySelectorAll('.icrow').forEach((el) => {
+      const at = +el.dataset.at;
+      el.querySelector('.icup').addEventListener('click', () => {
+        const l = icList(); if (at <= 0) return;
+        [l[at - 1], l[at]] = [l[at], l[at - 1]]; icSave(l); draw();
+      });
+      el.querySelector('.icdn').addEventListener('click', () => {
+        const l = icList(); if (at >= l.length - 1) return;
+        [l[at + 1], l[at]] = [l[at], l[at + 1]]; icSave(l); draw();
+      });
+      el.querySelector('.icdel').addEventListener('click', () => {
+        const l = icList(); l.splice(at, 1); icSave(l); draw();
+      });
+    });
+    box.querySelectorAll('.icadd').forEach((b) => {
+      b.addEventListener('click', () => {
+        const l = icList(); l.push(b.dataset.id); icSave(l); draw();
+      });
+    });
+    box.querySelector('.icreset').addEventListener('click', () => {
+      icSave(IC_DEFAULT.slice()); draw(); toast('아이콘 줄을 기본값으로 되돌렸습니다');
+    });
+    box.querySelector('.icdone').addEventListener('click', closePopup);
+  };
+  draw();
+
+  m.classList.remove('hidden');
+  const r = m.getBoundingClientRect();
+  m.style.left = Math.max(4, Math.round((window.innerWidth - r.width) / 2)) + 'px';
+  m.style.top = '60px';
+  popupOpen = true;
+}
+
 function bindIconbar() {
   const bar = $('#iconbar');
   if (!bar) return;
+
   bar.addEventListener('click', (e) => {
     const b = e.target.closest('button[data-ic]');
     if (!b) return;
-    const row = findTargetRow();
-    const ta = row ? taOf(row.id, fieldOf(row)) : null;
-
-    switch (b.dataset.ic) {
-      case 'open':   openTextFile(); break;
-      case 'save':   saveCurrentFile(false); break;
-      case 'saveas': saveCurrentFile(true); break;
-      case 'find':   openFindDlg('find'); break;
-      case 'repl':   openFindDlg('repl'); break;
-      case 'fif':    openFindInFiles(window.innerWidth - 24, 60); break;
-      case 'undo':   if (ta) { ta.focus(); bindDocTo(ta); } window.JJDoc.undo(); break;
-      case 'redo':   if (ta) { ta.focus(); bindDocTo(ta); } window.JJDoc.redo(); break;
-      case 'col':
-        if (row) toggleColHere(row.id, fieldOf(row));
-        else toast('열 편집할 글이 없습니다');
-        break;
-      case 'fit':
-        if (row) {
-          row.fit = !row.fit;
-          if (row.fit) row.height = null;
-          rerender(); scheduleSave();
-        }
-        break;
-      case 'copy':
-        if (row) copyText(resolve(row[fieldOf(row)], varsOf(activeTab())));
-        else toast('복사할 글이 없습니다');
-        break;
-      case 'newtab': addTabMenu(60, 80); break;
-    }
+    const it = icById(b.dataset.ic);
+    if (it) it.run();
   });
+
+  // 아이콘 줄을 우클릭하면 꾸미기
+  bar.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    iconbarSettings();
+  });
+
+  /* --- 끌어서 자리 옮기기 --- */
+  let from = -1;
+  bar.addEventListener('dragstart', (e) => {
+    const b = e.target.closest('button[data-ic]');
+    if (!b) return;
+    from = +b.dataset.at;
+    b.classList.add('dragging');
+    try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', b.dataset.ic); }
+    catch (err) { /* 무시 */ }
+  });
+  bar.addEventListener('dragover', (e) => {
+    if (from < 0) return;
+    e.preventDefault();
+    const b = e.target.closest('button[data-ic], .sep');
+    bar.querySelectorAll('.dropmark').forEach((x) => x.classList.remove('dropmark'));
+    if (b) b.classList.add('dropmark');
+  });
+  bar.addEventListener('drop', (e) => {
+    e.preventDefault();
+    const b = e.target.closest('button[data-ic]');
+    bar.querySelectorAll('.dropmark').forEach((x) => x.classList.remove('dropmark'));
+    if (from < 0 || !b) { from = -1; return; }
+    const to = +b.dataset.at;
+    if (to === from) { from = -1; return; }
+    const l = icList();
+    const [moved] = l.splice(from, 1);
+    l.splice(to, 0, moved);
+    icSave(l);
+    from = -1;
+  });
+  bar.addEventListener('dragend', () => {
+    bar.querySelectorAll('.dragging, .dropmark')
+       .forEach((x) => x.classList.remove('dragging', 'dropmark'));
+    from = -1;
+  });
+
+  renderIconbar();
 }
 
 /* ================= 팝업 메뉴 ================= */
@@ -3223,6 +3449,10 @@ const MENUS = [
         onClick: () => { ws.ui.showKey = ws.ui.showKey === true ? 'auto' : true; rerender(); saveNow(); }
       },
       {
+        icon: '⋯', label: '아이콘 줄 꾸미기…', tag: '넣기 · 빼기 · 자리',
+        onClick: () => iconbarSettings()
+      },
+      {
         icon: ws.ui.pastEnd !== false ? '☑' : '☐', label: '글 끝 뒤로도 스크롤',
         tag: '울트라에디트처럼',
         onClick: () => {
@@ -3925,6 +4155,7 @@ function applyState(s) {
   pin.classList.toggle('on', !!cfg.pinned);
   pin.textContent = cfg.pinned ? '📌' : '📍';
   pin.title = cfg.pinned ? '고정됨 — 클릭하면 자동 숨김' : '자동 숨김 — 클릭하면 우측 고정';
+  renderIconbar();        // 다크/라이트·고정 아이콘이 지금 상태를 보이도록
 }
 
 /* ================= 시작 ================= */

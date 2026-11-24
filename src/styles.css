@@ -1164,3 +1164,87 @@ body.pastend #zoom textarea.doctext,
 body.pastend .row textarea[data-fixedh="1"] {
   padding-bottom: 60vh;
 }
+
+
+/* ================= 아이콘 줄 꾸미기 ================= */
+/* 끌어서 자리 옮기는 중 */
+#iconbar button.dragging { opacity: .35; }
+#iconbar button.dropmark,
+#iconbar .sep.dropmark {
+  box-shadow: inset 2px 0 0 var(--accent);
+  border-radius: 4px;
+}
+#iconbar button { user-select: none; }
+
+.icset {
+  width: 330px;
+  max-width: calc(94vw - 24px);
+  box-sizing: border-box;
+  padding: 10px 12px 12px;
+  font-size: 11.5px;
+  overflow-x: hidden;
+}
+.icset .icnote,
+.icset .icnote2 {
+  color: var(--fg-dim);
+  font-size: 10.5px;
+  line-height: 1.5;
+  margin-bottom: 6px;
+}
+.icset .icnote2 { margin-top: 12px; }
+
+/* 지금 쓰는 아이콘 */
+.icset .icnow {
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--bg3);
+  max-height: 232px;
+  overflow-y: auto;
+}
+.icset .icrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 5px 3px 8px;
+  border-bottom: 1px solid var(--line);
+}
+.icset .icrow:last-child { border-bottom: 0; }
+.icset .icrow:hover { background: var(--bg2); }
+.icset .icic { width: 18px; text-align: center; font-size: 13px; }
+.icset .icnm { flex: 1; min-width: 0; color: var(--fg); overflow-wrap: anywhere; }
+.icset .icrow button {
+  background: transparent; border: 1px solid transparent; border-radius: 4px;
+  color: var(--fg-dim); cursor: pointer; font-size: 10px;
+  padding: 3px 5px; font-family: inherit; line-height: 1;
+}
+.icset .icrow button:hover { background: var(--bg3); border-color: var(--line); color: var(--accent); }
+.icset .icrow button:disabled { opacity: .25; cursor: default; }
+.icset .icrow .icdel:hover { background: var(--danger); border-color: var(--danger); color: #fff; }
+
+/* 넣을 수 있는 것들 */
+.icset .icpool {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.icset .icadd {
+  display: flex; align-items: center; gap: 5px;
+  background: var(--bg3); border: 1px solid var(--line); border-radius: 4px;
+  color: var(--fg-dim); cursor: pointer; font-size: 12px;
+  padding: 4px 8px; font-family: inherit; line-height: 1.3;
+}
+.icset .icadd em { font-style: normal; font-size: 10.5px; }
+.icset .icadd:hover { color: var(--accent); border-color: var(--accent); }
+
+.icset .btnline { display: flex; gap: 6px; margin-top: 12px; }
+.icset .btnline button {
+  flex: 1; min-width: 0;
+  background: var(--bg3); border: 1px solid var(--line); color: var(--fg-dim);
+  border-radius: 4px; padding: 6px 4px; cursor: pointer; font-size: 11px;
+  font-family: inherit; white-space: nowrap;
+}
+.icset .btnline button:hover { color: var(--fg); border-color: var(--fg-dim); }
+.icset .btnline button.prim {
+  background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600;
+}
+.icset .btnline button.prim:hover { filter: brightness(1.1); color: #fff; }
