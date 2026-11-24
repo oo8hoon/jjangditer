@@ -122,7 +122,8 @@ namespace JJ
             try
             {
                 var udf = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "JJangditer", "wv2");
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    Store.LocalName, "wv2");
                 var opts = new CoreWebView2EnvironmentOptions(
                     "--disable-features=Translate,MediaSessionService,HardwareMediaKeyHandling" +
                     (prefs.LowResource ? " --disable-gpu --disable-gpu-compositing" : ""));

@@ -1061,3 +1061,14 @@ body.is-doc #toolbar { display: none; }
   vertical-align: 1px;
 }
 #tabs .tab.shared { border-bottom: 2px solid var(--warn); }
+
+
+/* ================= 글 끝 뒤로도 스크롤 =================
+   울트라에디트처럼 마지막 줄에서 멈추지 않고 더 내려갈 수 있게,
+   글 칸 아래에 빈 자리를 둔다.
+   스크롤이 생기는 칸에만 준다 — 내용 높이에 맞춰 늘어나는 블록에 주면
+   그냥 빈 칸만 길어지기 때문이다.                                  */
+body.pastend #zoom textarea.doctext,
+body.pastend .row textarea[data-fixedh="1"] {
+  padding-bottom: 60vh;
+}

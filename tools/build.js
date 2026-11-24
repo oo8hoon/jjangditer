@@ -118,7 +118,9 @@ function writeAssemblyInfo() {
 
 function compile(webZip) {
   fs.mkdirSync(DIST, { recursive: true });
-  const out = path.join(DIST, `짱디터-${VERSION}.exe`);
+  // JJ_OUT 을 주면 그 자리에 만든다 (쓰고 있는 exe 를 건드리지 않고 시험할 때)
+  const out = process.env.JJ_OUT || path.join(DIST, `짱디터-${VERSION}.exe`);
+  fs.mkdirSync(path.dirname(out), { recursive: true });
   const icon = path.join(BUILD, 'icon.ico');
   const args = [
     '-nologo', '-target:winexe', '-platform:x64', '-optimize+', '-warn:1',
@@ -167,7 +169,7 @@ function main() {
   ensureSdk();
   const zip = packWeb();
   const out = compile(zip);
-  clean(out);
+  if (!process.env.JJ_OUT) clean(out);   // 시험용 빌드는 dist 를 건드리지 않는다
   const kb = fs.statSync(out).size / 1024;
   log('');
   log('빌드 완료');

@@ -93,7 +93,9 @@ function normTab(t) {
 function defaultUi() {
   // mode: 'work' = 작업 화면(값 채우고 복사), 'edit' = 설정 화면(틀을 고침)
   return { showCurrent: true, showKey: 'auto', filterUndone: false, mode: 'work',
-           mono: 'gulim', monoSize: 13, monoLh: 1.45 };
+           mono: 'gulim', monoSize: 13, monoLh: 1.45,
+           // 글 끝에서 멈추지 않고 더 내려갈 수 있게 (울트라에디트와 같은 방식)
+           pastEnd: true };
 }
 
 function tabFromTemplate(tplId) {
@@ -501,6 +503,7 @@ function applyMode() {
   const tab = activeTab();
   document.body.classList.toggle('empty-tab', !tab || !tab.rows.length);
   document.body.classList.toggle('mode-edit', edit);
+  document.body.classList.toggle('pastend', ws.ui.pastEnd !== false);
   document.body.classList.toggle('mode-work', !edit);
   const b = $('#btnMode');
   if (b) {
@@ -918,9 +921,42 @@ function moveByDrag(tab, srcId, dstId, after) {
 }
 
 /* ================= 탭 조작 ================= */
+
+/* ================= 탭을 오간 기록 ================= */
+/* 탭을 닫았을 때 엉뚱하게 첫 탭으로 튀지 않고, 보던 자리로 돌아가기 위한 것 */
+let tabHist = [];
+
+/** 탭을 옮긴다. 떠나는 탭을 기록에 남긴다 */
+function goTab(id) {
+  if (!id || id === ws.activeTabId) return;
+  if (ws.activeTabId) {
+    tabHist = tabHist.filter((x) => x !== ws.activeTabId);
+    tabHist.push(ws.activeTabId);
+    if (tabHist.length > 20) tabHist.shift();
+  }
+  tabHist = tabHist.filter((x) => x !== id);
+  ws.activeTabId = id;
+}
+
+/**
+ * 탭 하나를 닫을 때 어디로 갈지 고른다.
+ *  1) 바로 전에 보던 탭  (찾기 결과를 닫으면 고치던 글로 돌아온다)
+ *  2) 기록이 없으면 닫은 자리의 왼쪽 탭
+ */
+function tabAfterClose(closingId) {
+  for (let i = tabHist.length - 1; i >= 0; i--) {
+    const h = tabHist[i];
+    if (h !== closingId && ws.tabs.some((t) => t.id === h)) return h;
+  }
+  const i = ws.tabs.findIndex((t) => t.id === closingId);
+  const rest = ws.tabs.filter((t) => t.id !== closingId);
+  if (!rest.length) return null;
+  return rest[Math.max(0, Math.min(i - 1, rest.length - 1))].id;
+}
+
 function addTab(tab, activate) {
   ws.tabs.push(tab);
-  if (activate !== false) ws.activeTabId = tab.id;
+  if (activate !== false) goTab(tab.id);
   render();
   saveNow();
 }
@@ -1069,8 +1105,10 @@ async function deleteTab(id) {
     busy = false;
   }
 
+  const back = tabAfterClose(id);
   ws.tabs = ws.tabs.filter((t) => t.id !== id);
-  if (ws.activeTabId === id) ws.activeTabId = ws.tabs[0].id;
+  tabHist = tabHist.filter((x) => x !== id);
+  if (ws.activeTabId === id) ws.activeTabId = back || ws.tabs[0].id;
   render();
   saveNow();
 }
@@ -1094,7 +1132,7 @@ async function openTextFile() {
       '[예] 열려 있는 탭으로 가기    [아니오] 새 탭으로 또 열기    [취소] 그만두기');
     if (ans === 'cancel') return;
     if (ans === 'yes') {
-      ws.activeTabId = dup.tab.id;
+      goTab(dup.tab.id);
       render();
       toast('이미 열려 있는 탭으로 왔습니다');
       return;
@@ -1156,7 +1194,7 @@ async function reopenFile(path, label, line, q) {
   for (const t of ws.tabs) {
     const hit = t.rows.find((r) => r.filePath === path);
     if (hit) {
-      ws.activeTabId = t.id;
+      goTab(t.id);
       render();
       if (line) { openZoom(hit.id, 'text', hit.label); setTimeout(() => window.JJDoc.gotoLine(line, q), 80); }
       return;
@@ -1239,7 +1277,7 @@ async function importFiles() {
     }
   }
   if (added) {
-    ws.activeTabId = ws.tabs[ws.tabs.length - 1].id;
+    goTab(ws.tabs[ws.tabs.length - 1].id);
     render();
     saveNow();
     toast(added + '개 탭을 불러왔습니다');
@@ -3117,6 +3155,14 @@ const MENUS = [
         icon: ws.ui.showKey === true ? '☑' : '☐', label: '변수 키 입력란 항상 표시',
         onClick: () => { ws.ui.showKey = ws.ui.showKey === true ? 'auto' : true; rerender(); saveNow(); }
       },
+      {
+        icon: ws.ui.pastEnd !== false ? '☑' : '☐', label: '글 끝 뒤로도 스크롤',
+        tag: '울트라에디트처럼',
+        onClick: () => {
+          ws.ui.pastEnd = ws.ui.pastEnd === false;
+          rerender(); saveNow();
+        }
+      },
       { sep: true },
       {
         icon: '🅰', label: '글자체', tag: monoById(ws.ui.mono).label,
@@ -3560,7 +3606,7 @@ function bindTabs() {
       deleteTab(t.dataset.id);
       return;
     }
-    ws.activeTabId = t.dataset.id;
+    goTab(t.dataset.id);
     render();
     saveNow();
   });
@@ -3747,7 +3793,7 @@ function bindChrome() {
     else if (e.key === 'Tab') {
       e.preventDefault();
       const i = ws.tabs.findIndex((t) => t.id === ws.activeTabId);
-      ws.activeTabId = ws.tabs[(i + (e.shiftKey ? ws.tabs.length - 1 : 1)) % ws.tabs.length].id;
+      goTab(ws.tabs[(i + (e.shiftKey ? ws.tabs.length - 1 : 1)) % ws.tabs.length].id);
       render(); saveNow();
     }
   });

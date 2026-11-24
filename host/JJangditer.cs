@@ -60,7 +60,8 @@ namespace JJ
         {
             // 두 번 실행하면 기존 창을 앞으로
             bool first;
-            using (var mutex = new Mutex(true, "JJangditer.SingleInstance", out first))
+            using (var mutex = new Mutex(true, "JJangditer.SingleInstance" +
+                (Store.Sandbox.Length > 0 ? "." + Store.Sandbox : ""), out first))
             {
                 if (!first) { Native.PokeExisting(); return; }
 
@@ -96,11 +97,26 @@ namespace JJ
     {
         public static readonly JavaScriptSerializer JS = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
 
+        /// <summary>
+        /// 시험용 딴살림.
+        /// JJ_SANDBOX 환경변수를 주면 그 이름으로 설정·작업내용을 따로 쓰고,
+        /// 창도 따로 뜬다. 쓰고 있는 짱디터를 닫지 않고 시험하기 위한 것.
+        /// </summary>
+        public static readonly string Sandbox =
+            (Environment.GetEnvironmentVariable("JJ_SANDBOX") ?? "").Trim();
+
+        /// <summary>화면 캐시 폴더 이름 (시험용 딴살림이면 뒤에 이름이 붙는다)</summary>
+        public static string LocalName
+        {
+            get { return "JJangditer" + (Sandbox.Length > 0 ? "-" + Sandbox : ""); }
+        }
+
         public static string DataDir
         {
             get
             {
-                var d = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "JJangditer");
+                var name = "JJangditer" + (Sandbox.Length > 0 ? "-" + Sandbox : "");
+                var d = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), name);
                 Directory.CreateDirectory(d);
                 return d;
             }
@@ -343,7 +359,7 @@ namespace JJ
         public static void Prepare()
         {
             var baseDir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "JJangditer");
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Store.LocalName);
             WebDir = Path.Combine(baseDir, "web");
             BinDir = Path.Combine(baseDir, "bin");
             var stamp = Path.Combine(WebDir, ".stamp");
