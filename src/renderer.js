@@ -222,6 +222,8 @@ function buildTable(row, vars) {
     '<button data-act="tbl-colminus" title="마지막 열 삭제">열－</button>' +
     '<button data-act="tbl-header"' + (row.header ? ' class="on"' : '') + ' title="첫 행을 머리글로">머리글</button>' +
     '<span class="sp"></span>' +
+    '<button data-act="tbl-paste" title="클립보드의 표를 통째로 붙여넣기 ' +
+      '(탭 구분 · 마크다운 표 · CSV)">붙여넣기</button>' +
     '<button data-act="tbl-copymd" title="마크다운 표로 복사">MD</button>' +
     '<button data-act="tbl-copyall" class="prim" title="엑셀에 붙여넣을 수 있는 형식(탭 구분)">표 복사</button>' +
     '</div>';
@@ -252,10 +254,130 @@ function tblMarkdown(row, vars) {
   return out.join('\n');
 }
 
+
+/* ================= 표에 붙여넣기 =================
+   다른 데서 복사한 표를 그대로 받아 준다.
+     · 브라우저·엑셀에서 복사 → 탭으로 나뉜 글
+     · 마크다운 표          → | 항목 | 값 |
+     · CSV                 → 쉼표로 나뉜 글
+   어느 쪽인지 알아서 가린다.                                        */
+
+/** 따옴표를 아는 쉼표 쪼개기 */
+function splitCsvLine(line) {
+  const out = [];
+  let cur = '', q = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line.charAt(i);
+    if (q) {
+      if (ch === '"') {
+        if (line.charAt(i + 1) === '"') { cur += '"'; i++; } else q = false;
+      } else cur += ch;
+    } else if (ch === '"') q = true;
+    else if (ch === ',') { out.push(cur); cur = ''; }
+    else cur += ch;
+  }
+  out.push(cur);
+  return out.map((x) => x.trim());
+}
+
+/** 마크다운 표의 ---|---|--- 줄인가 */
+function isMdSepLine(l) {
+  return /^[\s|:\-+]+$/.test(l) && (l.match(/-/g) || []).length >= 2 && l.indexOf('|') >= 0;
+}
+
+/**
+ * 붙여넣은 글을 표(2차원 배열)로 바꾼다.
+ * 돌려주는 값 : { grid, kind, md }  /  표로 볼 수 없으면 null
+ */
+function parseTableText(t) {
+  if (t == null) return null;
+  const raw = String(t).replace(/\r\n?/g, '\n').replace(/\s*$/, '');
+  if (!raw) return null;
+  const lines = raw.split('\n');
+  const solid = lines.filter((l) => l.trim() !== '');
+  if (!solid.length) return null;
+
+  /* 1) 마크다운 표 */
+  if (solid.length >= 2 && solid.every((l) => l.indexOf('|') >= 0) && solid.some(isMdSepLine)) {
+    const grid = [];
+    for (const l of solid) {
+      if (isMdSepLine(l)) continue;
+      let x = l.trim();
+      if (x.charAt(0) === '|') x = x.slice(1);
+      if (x.charAt(x.length - 1) === '|') x = x.slice(0, -1);
+      grid.push(x.split('|').map((v) => v.replace(/\\\|/g, '|').trim()));
+    }
+    if (grid.length) return { grid: grid, kind: '마크다운 표', md: true };
+  }
+
+  /* 2) 탭으로 나뉜 글 (브라우저·엑셀에서 복사하면 이렇게 온다) */
+  if (raw.indexOf('\t') >= 0) {
+    return { grid: lines.map((l) => l.split('\t')), kind: '탭 구분', md: false };
+  }
+
+  /* 3) 쉼표로 나뉜 글 — 모든 줄의 칸 수가 같을 때만 (글 속 쉼표와 헷갈리지 않게) */
+  if (solid.length >= 2 && solid.every((l) => l.indexOf(',') >= 0)) {
+    const g = solid.map(splitCsvLine);
+    const n = g[0].length;
+    if (n >= 2 && g.every((r) => r.length === n)) return { grid: g, kind: 'CSV', md: false };
+  }
+
+  /* 4) 그 밖에는 한 줄을 한 칸으로 (세로로 쭉 넣는다) */
+  if (lines.length >= 2) {
+    return { grid: lines.map((l) => [l]), kind: '줄마다 한 칸', md: false };
+  }
+  return null;
+}
+
+/** 표의 (r0, c0) 자리부터 붙여넣는다. 모자라면 행·열을 늘린다. */
+function tablePasteAt(row, r0, c0, grid) {
+  let wantC = 0;
+  for (const g of grid) if (c0 + g.length > wantC) wantC = c0 + g.length;
+  const needC = Math.min(MAX_TBL_COLS, Math.max(row.cells[0].length, wantC));
+  const needR = Math.min(MAX_TBL_ROWS, Math.max(row.cells.length, r0 + grid.length));
+
+  row.cells.forEach((rr) => { while (rr.length < needC) rr.push(''); });
+  while (row.cells.length < needR) row.cells.push(new Array(needC).fill(''));
+
+  let wrote = 0, cut = false;
+  for (let i = 0; i < grid.length; i++) {
+    const r = r0 + i;
+    if (r >= row.cells.length) { cut = true; break; }
+    for (let j = 0; j < grid[i].length; j++) {
+      const c = c0 + j;
+      if (c >= row.cells[r].length) { cut = true; continue; }
+      row.cells[r][c] = grid[i][j];
+      wrote++;
+    }
+  }
+  return { wrote: wrote, cut: cut };
+}
+
+/** 붙여넣고 나서 알려 주기 */
+function tablePasteDone(res, parsed, grid) {
+  rerender();
+  scheduleSave();
+  const cols = grid.reduce((m, g) => Math.max(m, g.length), 0);
+  toast(grid.length + '행 × ' + cols + '열을 넣었습니다 (' + parsed.kind + ')' +
+        (res.cut ? ' — 표 크기를 넘는 부분은 넣지 못했습니다' : ''));
+}
+
+/** 표 전체를 클립보드 내용으로 채운다 (맨 위 왼쪽부터) */
+async function tablePasteAll(row) {
+  const t = await window.jj.paste();
+  const parsed = parseTableText(t);
+  if (!parsed) { toast('클립보드에 표로 볼 만한 내용이 없습니다'); return; }
+  const g = parsed.grid;
+  const res = tablePasteAt(row, 0, 0, g);
+  if (parsed.md && g.length > 1) row.header = true;   // 마크다운 표면 첫 줄은 머리글
+  tablePasteDone(res, parsed, g);
+}
+
 function tableAct(act, row, btn) {
   const vars = varsOf(activeTab());
   const cols = row.cells[0].length;
   if (act === 'tbl-copyall') { copyText(tblTsv(row, vars)); return true; }
+  if (act === 'tbl-paste') { tablePasteAll(row); return true; }
   if (act === 'tbl-copymd') { copyText(tblMarkdown(row, vars)); return true; }
   if (act === 'tbl-copyrow') {
     copyText(row.cells[+btn.dataset.r].map((v) => resolve(v, vars)).join('\t'));
@@ -298,6 +420,21 @@ function tableCellMenu(row, r, c, x, y) {
     { icon: '⧉', label: '이 행 복사', onClick: () => copyText(row.cells[r].map((v) => resolve(v, vars)).join('\t')) },
     { icon: '⧉', label: '이 열 복사', onClick: () => copyText(row.cells.map((rr) => resolve(rr[c], vars)).join('\n')) },
     { icon: '⧉', label: '표 전체 복사', tag: '탭 구분', onClick: () => copyText(tblTsv(row, vars)) },
+    { sep: true },
+    {
+      icon: '⬇', label: '여기에 붙여넣기', tag: '이 칸부터',
+      onClick: async () => {
+        const t = await window.jj.paste();
+        const parsed = parseTableText(t);
+        if (!parsed) { toast('클립보드에 표로 볼 만한 내용이 없습니다'); return; }
+        const res = tablePasteAt(row, r, c, parsed.grid);
+        tablePasteDone(res, parsed, parsed.grid);
+      }
+    },
+    {
+      icon: '⬇', label: '표 전체를 붙여넣기', tag: '맨 위부터',
+      onClick: () => tablePasteAll(row)
+    },
     { icon: '⧉', label: '마크다운 표로 복사', onClick: () => copyText(tblMarkdown(row, vars)) },
     { sep: true },
     { icon: '↑', label: '위에 행 삽입', onClick: () => { row.cells.splice(r, 0, blank()); after(); } },
@@ -2383,6 +2520,7 @@ function helpItems() {
     { icon: '', label: '긴 글은 [⤢ 크게] 로 넓게 펼쳐 고칩니다' },
     { icon: '', label: '줄을 우클릭하면 삭제·이동·칸 켜고 끄기 메뉴가 나옵니다' },
     { icon: '', label: '표: 셀 더블클릭 = 복사, 우클릭 = 행/열 메뉴' },
+    { icon: '', label: '표: 칸에서 Ctrl+V = 표를 칸칸이 나눠 넣기 (탭·마크다운·CSV)' },
     { icon: '', label: '표: 행/열 머리를 누르면 그 줄 전체 복사' },
     { icon: '', label: '탭 더블클릭 = 이름 변경, 우클릭 = 메뉴' },
     { icon: '', label: '탭의 ✕ 또는 가운데 버튼 = 탭 닫기' },
@@ -2495,6 +2633,7 @@ function helpMenuOld() {
     { icon: '', label: '명령어에 {{키}} 를 쓰면 항목 값이 들어갑니다' },
     { icon: '', label: '줄을 우클릭하면 삭제·이동·칸 켜고 끄기 메뉴가 나옵니다' },
     { icon: '', label: '표: 셀 더블클릭 = 복사, 우클릭 = 행/열 메뉴' },
+    { icon: '', label: '표: 칸에서 Ctrl+V = 표를 칸칸이 나눠 넣기 (탭·마크다운·CSV)' },
     { icon: '', label: '표: 행/열 머리를 누르면 그 줄 전체 복사' },
     { icon: '', label: '탭 더블클릭 = 이름 변경, 우클릭 = 메뉴' },
     { icon: '', label: '탭의 ✕ 또는 가운데 버튼 = 탭 닫기' },
@@ -4062,6 +4201,25 @@ function bindRows() {
     e.preventDefault();
     const row = rowById(holder.dataset.id);
     if (row) rowMenu(row, e.clientX, e.clientY);
+  });
+
+  /* 표 칸에 여러 칸짜리 글을 붙여넣으면 칸칸이 나눠 넣는다 */
+  host.addEventListener('paste', (e) => {
+    const cell = e.target.closest && e.target.closest('.cell');
+    if (!cell) return;
+    const t = (e.clipboardData || window.clipboardData).getData('text') || '';
+    const parsed = parseTableText(t);
+    if (!parsed) return;                                   // 그냥 글이면 평소대로
+    const g = parsed.grid;
+    if (g.length === 1 && g[0].length === 1) return;        // 한 칸이면 평소대로
+    e.preventDefault();
+    const holder = cell.closest('[data-id]');
+    const row = rowById(holder.dataset.id);
+    if (!row || !row.cells) return;
+    const r0 = +cell.dataset.r, c0 = +cell.dataset.c;
+    const res = tablePasteAt(row, r0, c0, g);
+    if (parsed.md && r0 === 0 && c0 === 0 && g.length > 1) row.header = true;
+    tablePasteDone(res, parsed, g);
   });
 
   host.addEventListener('keydown', (e) => {
