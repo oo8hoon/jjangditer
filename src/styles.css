@@ -152,7 +152,15 @@ button { font-family: inherit; }
 .chip.on { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
 
 /* ---------- 행 목록 ---------- */
-#rows { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 6px 8px 40px; }
+/* scrollbar-gutter: 스크롤 막대가 생겼다 없어졌다 할 때마다 내용 폭이
+   9px 씩 들썩이지 않도록 자리를 늘 비워 둔다. */
+#rows {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 6px 8px 40px;
+  scrollbar-gutter: stable;
+}
 #rows::-webkit-scrollbar { width: 9px; }
 #rows::-webkit-scrollbar-thumb { background: var(--bg3); border-radius: 5px; }
 #rows::-webkit-scrollbar-thumb:hover { background: var(--line); }
