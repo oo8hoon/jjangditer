@@ -926,6 +926,8 @@ function renderRows() {
   requestAnimationFrame(() => {
     $$('#rows textarea').forEach(autosize);
     applyFit();                        // 창이 늦게 떠도 다시 맞춘다
+    watchResize();                     // 끌어서 높이를 바꾸면 알아채도록
+    applyPastEnd();
   });
 }
 
@@ -939,9 +941,109 @@ function heightAttr(row) {
  * '패널에 맞춤' 인 블록들의 높이를 지금 패널 크기에 맞춰 다시 잡는다.
  * 그릴 때마다, 그리고 창 크기가 바뀔 때마다 부른다.
  */
+
+/* ================= 끌어서 높이 조절 =================
+   '패널 높이 맞춤' 인 글 칸은 그릴 때마다 높이를 다시 잡는다.
+   그래서 사용자가 모서리를 끌어도 곧바로 되돌아가 버렸다.
+   끌어서 바꾼 것을 알아채면 '맞춤' 을 풀고 그 높이를 기억한다.         */
+
+let sizeWatcher = null;
+
+/** 우리가 코드로 정해 준 높이를 적어 둔다 (사용자가 끈 것과 가리려고) */
+function markAutoHeight(el) {
+  el.dataset.autoh = String(Math.round(el.getBoundingClientRect().height));
+}
+
+/** 글 칸들의 높이 바뀜을 지켜본다 */
+function watchResize() {
+  if (typeof ResizeObserver === 'undefined') return;
+  if (!sizeWatcher) {
+    sizeWatcher = new ResizeObserver((entries) => {
+      for (const e of entries) onResized(e.target);
+    });
+  }
+  sizeWatcher.disconnect();
+  const list = document.querySelectorAll('#rows textarea.memo, #rows textarea.code');
+  for (const el of list) {
+    markAutoHeight(el);
+    sizeWatcher.observe(el);
+  }
+}
+
+/** 사람이 끌어서 바꾼 것이면 그 높이를 블록에 적어 둔다 */
+function onResized(el) {
+  const now = Math.round(el.getBoundingClientRect().height);
+  const was = +(el.dataset.autoh || 0);
+  if (!now || Math.abs(now - was) < 3) return;      // 우리가 바꾼 것 — 그냥 둔다
+  el.dataset.autoh = String(now);
+
+  const holder = el.closest('#rows [data-id]');
+  if (!holder) return;
+  const row = rowById(holder.dataset.id);
+  if (!row) return;
+
+  // 내용에 맞춰 늘어나는 블록은 건드리지 않는다 (타자 칠 때마다 커지므로)
+  if (el.dataset.fixedh !== '1') return;
+
+  row.fit = false;                 // 더 이상 패널 높이를 따르지 않는다
+  row.height = now;
+  el.removeAttribute('data-fit');
+  el.style.height = now + 'px';
+  applyPastEnd();                  // 줄인 높이에 맞춰 끝 여백도 다시
+  updateFitButtons(holder, row);
+  scheduleSave();
+}
+
+/** 끌어서 바꾸면 [전체화 / 소형화] 단추 글씨도 맞춰 준다 */
+function updateFitButtons(holder, row) {
+  const txt = row.fit ? '\u2921 소형화' : '\u2922 전체화';
+  const tip = row.fit ? '원래 크기로 되돌리기' : '패널 높이에 맞춰 크게 보기';
+  holder.querySelectorAll('[data-act="fit"]').forEach((b) => {
+    b.textContent = txt;
+    b.title = tip;
+  });
+}
+
+
+/**
+ * '글 끝 뒤로도 스크롤' 여백을 넣는다.
+ * 그 칸 높이의 60% 만큼만 준다 — 화면 높이로 주면 글 칸을 그보다
+ * 작게 줄일 수 없게 되어(테두리+여백이 최소 높이가 된다) 크기 조절이 막힌다.
+ */
+let padHold = false;        // 모서리를 끄는 중 (여백을 잠깐 뺀다)
+
+/** 모서리를 끄는 중에는 여백 때문에 더 줄일 수 없으므로 빼 둔다 */
+function holdPastEnd(el) {
+  padHold = true;
+  el.style.paddingBottom = '';
+}
+
+/** 손을 떼면 다시 넣는다 */
+function releasePastEnd() {
+  if (!padHold) return;
+  padHold = false;
+  applyPastEnd();
+}
+
+function applyPastEnd() {
+  if (padHold) return;                       // 끄는 중에는 건드리지 않는다
+  const on = !!ws && ws.ui.pastEnd !== false;
+  const put = (el) => {
+    if (!el) return;
+    const h = el.clientHeight;                 // 테두리 안쪽 높이 (여백을 넣어도 안 변한다)
+    el.style.paddingBottom = on && h > 40 ? Math.round(h * 0.6) + 'px' : '';
+  };
+  document.querySelectorAll('#rows textarea[data-fixedh="1"]').forEach(put);
+  put(document.querySelector('#zoom textarea.doctext'));
+}
+
 function applyFit() {
   const list = document.querySelectorAll('#rows [data-fit="1"]');
-  for (const el of list) el.style.height = fullHeightFor(el) + 'px';
+  for (const el of list) {
+    el.style.height = fullHeightFor(el) + 'px';
+    markAutoHeight(el);
+  }
+  applyPastEnd();
 }
 
 function autosize(ta) {
@@ -3092,7 +3194,8 @@ function openZoom(rowId, field, title) {
   z.classList.remove('hidden');
   window.JJDoc.bind(document.getElementById('zoom'), null);
   window.JJDoc.load(row[field] || '');
-  setTimeout(() => window.JJDoc.focus(), 20);
+  applyPastEnd();                      // 편집기에도 끝 여백을 넣는다
+  setTimeout(() => { window.JJDoc.focus(); applyPastEnd(); }, 20);
 }
 
 /** 편집(열 편집) 기능을 이 글 칸에 붙인다 */
@@ -4203,6 +4306,15 @@ function bindRows() {
     if (row) rowMenu(row, e.clientX, e.clientY);
   });
 
+  /* 글 칸 모서리(크기 조절 손잡이)를 누르면 끝 여백을 잠깐 뺀다.
+     여백이 남아 있으면 그 높이보다 작게 줄일 수 없기 때문이다. */
+  host.addEventListener('mousedown', (e) => {
+    const el = e.target.closest && e.target.closest('textarea[data-fixedh="1"]');
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    if (e.clientX > r.right - 22 && e.clientY > r.bottom - 22) holdPastEnd(el);
+  });
+
   /* 표 칸에 여러 칸짜리 글을 붙여넣으면 칸칸이 나눠 넣는다 */
   host.addEventListener('paste', (e) => {
     const cell = e.target.closest && e.target.closest('.cell');
@@ -4606,6 +4718,9 @@ function applyState(s) {
     window.jj.findInFilesCancel();
     showProgress('취소하는 중…');
   });
+  window.addEventListener('mouseup', () => setTimeout(releasePastEnd, 0));
+  window.addEventListener('blur', () => setTimeout(releasePastEnd, 0));
+
   // 모니터를 옮기거나 창 크기가 바뀌면 '패널 맞춤' 블록을 다시 잰다
   let fitTimer = null;
   window.addEventListener('resize', () => {

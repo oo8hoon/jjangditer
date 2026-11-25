@@ -1160,10 +1160,8 @@ body.is-doc #toolbar { display: none; }
    글 칸 아래에 빈 자리를 둔다.
    스크롤이 생기는 칸에만 준다 — 내용 높이에 맞춰 늘어나는 블록에 주면
    그냥 빈 칸만 길어지기 때문이다.                                  */
-body.pastend #zoom textarea.doctext,
-body.pastend .row textarea[data-fixedh="1"] {
-  padding-bottom: 60vh;
-}
+/* 여백 크기는 renderer.js 의 applyPastEnd() 가 칸 높이에 맞춰 넣는다.
+   화면 높이(vh)로 주면 글 칸을 그 여백보다 작게 줄일 수 없게 된다. */
 
 
 /* ================= 아이콘 줄 꾸미기 ================= */
