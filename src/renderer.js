@@ -3816,9 +3816,12 @@ async function updateSettings(x, y) {
     '<div class="rowline">' +
       '<input type="text" class="url" placeholder="\\\\서버\\공유\\짱디터  또는  https://..." spellcheck="false">' +
       '<button class="browse" title="폴더 찾기">…</button>' +
+      '<button class="defurl" title="기본 주소(GitHub)로 되돌리기">기본값</button>' +
     '</div>' +
     '<label class="chkline"><input type="checkbox" class="auto"> 시작할 때 / 6시간마다 자동 확인</label>' +
-    '<div class="hintline">이 폴더(주소)에 <b>latest.json</b> 과 새 exe 를 올려두면<br>직원들의 짱디터가 자동으로 새 버전을 안내합니다.</div>' +
+    '<div class="hintline">여기 적힌 곳에서 새 버전을 받아옵니다. 비워 두면 업데이트가 안 됩니다.<br>' +
+      '사내 공유 폴더를 쓰려면 그 폴더에 <b>latest.json</b> 과 새 exe 를 함께 올려 두세요.<br>' +
+      '(exe 만 있는 폴더를 가리키면 안 됩니다 — latest.json 이 있어야 버전을 압니다)</div>' +
     '<div class="btnline"><button class="now">지금 확인</button><button class="save prim">저장</button></div>';
   m.appendChild(form);
 
@@ -3830,6 +3833,11 @@ async function updateSettings(x, y) {
   $('.browse', form).addEventListener('click', async () => {
     const d = await window.jj.browseFolder();
     if (d) url.value = d;
+  });
+  $('.defurl', form).addEventListener('click', () => {
+    url.value = info.defaultUrl || '';
+    url.focus();
+    toast('기본 주소(GitHub)로 되돌렸습니다 — [저장] 을 누르세요');
   });
   $('.save', form).addEventListener('click', async () => {
     await window.jj.updateConfig({ updateUrl: url.value, autoUpdate: auto.checked });

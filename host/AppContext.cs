@@ -415,6 +415,7 @@ namespace JJ
                     return new Dictionary<string, object> {
                         { "version", Application.ProductVersion },
                         { "updateUrl", prefs.UpdateUrl },
+                        { "defaultUrl", Prefs.DEFAULT_UPDATE_URL },
                         { "autoUpdate", prefs.AutoUpdate },
                         { "lowResource", prefs.LowResource },
                         { "pending", pendingVersion }
@@ -1240,7 +1241,8 @@ namespace JJ
             if (baseUrl.Length == 0)
             {
                 if (manual) UpdEvent("error", new Dictionary<string, object> {
-                    { "message", "업데이트 위치가 설정되어 있지 않습니다. 도구 → 업데이트 설정에서 지정하세요." } });
+                    { "message", "업데이트 위치가 비어 있습니다.\r\n"
+                      + "[도구 → 업데이트 설정] 에서 [기본값] 을 누르거나 주소를 넣어 주세요." } });
                 return;
             }
             try

@@ -282,7 +282,14 @@ namespace JJ
         public string DisplayId = null;
         public string DisplayRect = null;   // "x,y,w,h" — 번호가 바뀌어도 찾아내려고
         public string LastDir = null;
-        public string UpdateUrl = "";
+        /// <summary>
+        /// 새로 설치한 PC 에서도 설정 없이 바로 업데이트를 받도록 기본 주소를 둔다.
+        /// 사내 공유 폴더 등 다른 곳을 쓰려면 [도구 → 업데이트 설정] 에서 바꾸면 된다.
+        /// </summary>
+        public const string DEFAULT_UPDATE_URL =
+            "https://github.com/oo8hoon/jjangditer/releases/latest/download";
+
+        public string UpdateUrl = DEFAULT_UPDATE_URL;
         public bool AutoUpdate = true;
         public bool LowResource = true;
         public int TriggerZone = 2;        // 띠 범위 0=전체 1=넓게 2=가운데 3=좁게
@@ -304,7 +311,9 @@ namespace JJ
                 p.DisplayId = GetStr(d, "displayId", null);
                 p.DisplayRect = GetStr(d, "displayRect", null);
                 p.LastDir = GetStr(d, "lastDir", null);
-                p.UpdateUrl = GetStr(d, "updateUrl", "");
+                p.UpdateUrl = GetStr(d, "updateUrl", DEFAULT_UPDATE_URL);
+                if (string.IsNullOrEmpty((p.UpdateUrl ?? "").Trim()))
+                    p.UpdateUrl = DEFAULT_UPDATE_URL;
                 p.AutoUpdate = GetBool(d, "autoUpdate", p.AutoUpdate);
                 p.LowResource = GetBool(d, "lowResource", p.LowResource);
                 p.TriggerZone = GetInt(d, "triggerZone", p.TriggerZone);
